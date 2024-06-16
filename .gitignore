@@ -1,0 +1,13 @@
+# 忽略所有以 .pyc 结尾的文件
+*.pyc
+
+# 忽略所有以 .log 结尾的文件
+*.log
+
+# 忽略文件夹 temp
+/temp/
+
+# 忽略文件夹 venv (Python 虚拟环境)
+/venv/
+
+.idea
