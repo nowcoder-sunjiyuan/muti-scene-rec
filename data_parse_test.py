@@ -1,12 +1,13 @@
 import data_parse
 from utils.tfrecord_util import read_tfrecord
+from utils.base_tool import dataset_to_csv
 import tensorflow as tf
 import os
 import json
-import csv
 
 
-train_file, test_file = data_parse.mac_tain_test_file()
+
+train_file, test_file = data_parse.win_train_test_file()
 TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
 
 # feature 文件
@@ -23,12 +24,7 @@ for key, value in all_features.items():
 dataset = read_tfrecord(train_file, feature_description, 1024)
 
 # 将数据写入CSV
-with open('/Users/nowcoder/output.csv', 'w', newline='') as csvfile:
-    writer = csv.DictWriter(csvfile, fieldnames=feature_names)
-    writer.writeheader()
-    for features in dataset:
-        # 将TensorFlow的特征转换为标准Python类型
-        features = {key: value.numpy() for key, value in features.items()}
-        writer.writerow(features)
+# dataset_to_csv('', dataset, feature_names)
+
 
 
