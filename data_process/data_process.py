@@ -1,6 +1,12 @@
 import datetime
 import os
+import sys
 import tensorflow as tf
+import json
+from utils.tfrecord_util import read_tfrecord
+
+TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
+
 
 def win_train_test_file():
     start_time = datetime.datetime(2024, 5, 11, 0, 0, 0)
@@ -30,7 +36,8 @@ def win_train_test_file():
     print(f"添加的文件数量：训练集 {len(train_files)} 测试集 {len(test_files)}")
     return train_files, test_files
 
-def mac_tain_test_file():
+
+def mac_train_test_file():
     train_files, test_files = ['/Users/nowcoder/data/2024061900.tfrecords',
                                '/Users/nowcoder/data/2024061901.tfrecords',
                                '/Users/nowcoder/data/2024061902.tfrecords',
@@ -39,3 +46,30 @@ def mac_tain_test_file():
 
     print(f"添加的文件数量：训练集 {len(train_files)} 测试集 {len(test_files)}")
     return train_files, test_files
+
+
+def train_test_dataset(batch_size: int):
+    train_file, test_file = [], []
+    if sys.platform.startswith("win"):
+        train_file, test_file = win_train_test_file()
+    elif sys.platform.startswith("linux"):
+        raise
+    elif sys.platform.startswith("darwin"):
+        train_file, test_file = mac_train_test_file()
+    else:
+        raise
+
+
+    # feature 文件
+    current_dir = os.path.dirname(__file__)
+    json_file = os.path.join(current_dir, 'feature.json')
+    all_features = json.load(open(json_file))
+
+    # 构建 feature_description, dataset
+    feature_description = {}
+    feature_names = []
+    for key, value in all_features.items():
+        feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
+        feature_names.append(key)
+    dataset = read_tfrecord(train_file, feature_description, batch_size)
+    return dataset
