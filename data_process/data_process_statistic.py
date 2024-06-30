@@ -19,7 +19,7 @@ for key, value in all_features.items():
     feature_names.append(key)
 
 # 将数据写入CSV
-# dataset_to_csv('/Users/nowcoder/output.csv', dataset, feature_names)
+# dataset_to_csv('/Users/nowcoder/feature_data.csv', dataset, feature_names)
 
 # 对数据做一些统计
 user_set = set()
