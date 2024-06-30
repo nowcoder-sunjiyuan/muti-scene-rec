@@ -34,3 +34,16 @@ def hash_lookup_embedding(inputs, num_bins, embedding_dimension, embedding_regul
     if embedding_output.shape[1] == 1:
         embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
     return embedding_output
+
+
+def reduce_mean_with_mask(inputs, valid_length, max_len, elem_type=tf.float32):
+    # mask 是由 length 和 max_len 通过函数得到的
+    embeddings = inputs
+    mask = get_mask(valid_length, max_len, elem_type)
+    masked_embeddings = embeddings * mask
+    summed = tf.reduce_sum(masked_embeddings, axis=1)
+    return summed / tf.cast(valid_length, dtype=tf.float32)
+
+
+def get_mask(valid_length, max_len, elem_type=tf.float32):
+    return tf.reshape(tf.sequence_mask(valid_length, maxlen=max_len, dtype=elem_type), shape=(-1, max_len, 1))
