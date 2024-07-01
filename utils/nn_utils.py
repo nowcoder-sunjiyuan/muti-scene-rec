@@ -41,6 +41,23 @@ def hash_lookup_embedding(inputs, num_bins, embedding_dimension, embedding_regul
     return embedding_output
 
 
+def integer_lookup_embedding(inputs, voc_list, embedding_dimension, embedding_regularizer, embedding_initializer, name):
+    integer_lookup_layer = layers.IntegerLookup(vocabulary=voc_list,
+                                                name=f"{name}_lookup_layer")
+    embedding_layer = layers.Embedding(input_dim=len(integer_lookup_layer.get_vocabulary()) + 1,
+                                       output_dim=embedding_dimension,
+                                       embeddings_regularizer=embedding_regularizer,
+                                       embeddings_initializer=embedding_initializer,
+                                       name=f"{name}_embedding_layer")
+    embedding_output = embedding_layer(integer_lookup_layer(inputs))
+
+    if embedding_output.shape[1] == 1:
+        # dataset batch 后经过 lookup 和 embedding  (none, 1, 16)
+        reshape_layer = layers.Reshape((embedding_output.shape[-1],))
+        embedding_output = reshape_layer(embedding_output)
+    return embedding_output
+
+
 class ExpandDimsLayer(Layer):
     def __init__(self, axis, **kwargs):
         super(ExpandDimsLayer, self).__init__(**kwargs)
@@ -64,13 +81,26 @@ class ReduceSumLayer(Layer):
         return tf.reduce_sum(inputs, axis=self.axis)
 
     def compute_output_shape(self, input_shape):
-        return input_shape[:self.axis] + input_shape[self.axis+1:]
+        return input_shape[:self.axis] + input_shape[self.axis + 1:]
 
 
-def reduce_mean_with_mask(inputs, valid_length, max_len, elem_type=tf.float32):
-    # mask 是由 length 和 max_len 通过函数得到的
-    embeddings = inputs
-    mask = tf.reshape(tf.sequence_mask(valid_length, maxlen=max_len, dtype=elem_type), shape=(-1, max_len, 1))
-    masked_embeddings = embeddings * mask
-    summed = tf.reduce_sum(masked_embeddings, axis=1)
-    return summed / tf.cast(valid_length, dtype=tf.float32)
+class ReduceMeanWithMask(Layer):
+    """
+    对输入的inputs序列数据，根据真实长度，求平均
+    """
+
+    def __init__(self, max_len, elem_type=tf.float32, **kwargs):
+        super(ReduceMeanWithMask, self).__init__(**kwargs)
+        self.max_len = max_len
+        self.elem_type = elem_type
+
+    def call(self, inputs, valid_length):
+        # 给每个序列生成掩码
+        mask = tf.sequence_mask(valid_length, maxlen=self.max_len, dtype=self.elem_type)
+        mask = tf.reshape(mask, shape=(-1, self.max_len, 1))
+        masked_embeddings = inputs * mask
+        summed = tf.reduce_sum(masked_embeddings, axis=1)
+        return summed / tf.cast(valid_length, dtype=tf.float32)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[0], input_shape[2]

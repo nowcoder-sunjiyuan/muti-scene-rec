@@ -29,6 +29,10 @@ CAREER_JOB1_1_VOC = ["<nan>", "11226", "11227", "11228", "11229", "11230", "1123
                      "143750", "143848", "143882", "-1"]
 SCHOOL_TYPE_VOC = ["<nan>", "211", "985", "一本", "二本", "初高中", "双一流", "海外", "海外QS_TOP100", "其他"]
 GENDER_VOC = ["<nan>", "其他", "男", "女"]
+EDU_WORK_STATUS_VOC = [0, 1, 2]
+
+SCHOOL_VOC_PATH = "../data_process/school_vocabulary.txt"
+SCHOOL_MAJOR_VOC_PATH = "../data_process/school_major_vocabulary.txt"
 
 take_dataset = dataset.take(1)
 [features] = take_dataset
@@ -36,35 +40,85 @@ take_dataset = dataset.take(1)
 # 给所有特征建立 tensor
 inputs = data_process.build_input_tensor()
 
-# (1,)
-gender_col = features['gender']
-gender_emb = nn.string_lookup_embedding(
-    inputs=inputs['gender'],
-    voc_list=GENDER_VOC,
-    embedding_dimension=16,
-    embedding_regularizer=L2REG, embedding_initializer='glorot_normal', name='gender')
+# 最后tensor的结果dict
+tensor_dict = {}
 
 """
-short_term_company (hash) (none, 5) 代表五个公司的id
+基本的特征
+"""
+# (none, 1)  -> (none, 16) 性别
+tensor_dict['gender'] = nn.string_lookup_embedding(inputs=inputs['gender'], voc_list=GENDER_VOC,
+                                                   embedding_dimension=16, embedding_regularizer=L2REG,
+                                                   embedding_initializer='glorot_normal', name='gender')
+# (none, 1)  -> (none, 16)
+tensor_dict['author_gender'] = nn.string_lookup_embedding(inputs=inputs['author_gender'], voc_list=GENDER_VOC,
+                                                          embedding_dimension=16, embedding_regularizer=L2REG,
+                                                          embedding_initializer='glorot_normal', name='gender')
+# (none, 1)  -> (none, 16) 学校
+tensor_dict['school'] = nn.string_lookup_embedding(inputs=inputs['school'], voc_list=SCHOOL_TYPE_VOC,
+                                                   embedding_dimension=16, embedding_regularizer=L2REG,
+                                                   embedding_initializer='glorot_normal', name='school')
+# (none, 1)  -> (none, 16)
+tensor_dict['author_school'] = nn.string_lookup_embedding(inputs=inputs['author_school'], voc_list=SCHOOL_TYPE_VOC,
+                                                          embedding_dimension=16, embedding_regularizer=L2REG,
+                                                          embedding_initializer='glorot_normal', name='author_school')
+# (none, 1) -> (none, 16) 专业
+tensor_dict['school_major'] = nn.string_lookup_embedding(inputs=inputs['school_major'], voc_list=SCHOOL_MAJOR_VOC_PATH,
+                                                         embedding_dimension=16, embedding_regularizer=L2REG,
+                                                         embedding_initializer='glorot_normal', name='school_major')
+# (none, 1) -> (none, 16)
+tensor_dict['author_school_major'] = nn.string_lookup_embedding(inputs=inputs['author_school_major'],
+                                                                voc_list=SCHOOL_MAJOR_VOC_PATH,
+                                                                embedding_dimension=16, embedding_regularizer=L2REG,
+                                                                embedding_initializer='glorot_normal',
+                                                                name='school_major')
+# (none, 1) -> (none, 16) 学校类型，211，985
+tensor_dict['school_type'] = nn.string_lookup_embedding(inputs=inputs['school_type'],
+                                                        voc_list=SCHOOL_TYPE_VOC,
+                                                        embedding_dimension=16, embedding_regularizer=L2REG,
+                                                        embedding_initializer='glorot_normal',
+                                                        name='school_major')
+tensor_dict['author_school_type'] = nn.string_lookup_embedding(inputs=inputs['author_school_type'],
+                                                               voc_list=SCHOOL_TYPE_VOC,
+                                                               embedding_dimension=16, embedding_regularizer=L2REG,
+                                                               embedding_initializer='glorot_normal',
+                                                               name='school_major')
+edu_work_status_col = features['edu_work_status']
+tensor_dict['edu_work_status'] = nn.integer_lookup_embedding(inputs=edu_work_status_col, voc_list=EDU_WORK_STATUS_VOC,
+                                                             embedding_dimension=16, embedding_regularizer=L2REG,
+                                                             embedding_initializer='glorot_normal',
+                                                             name='edu_work_status')
+tensor_dict['author_edu_work_status'] = nn.integer_lookup_embedding(inputs=inputs['author_edu_work_status'],
+                                                                    voc_list=EDU_WORK_STATUS_VOC,
+                                                                    embedding_dimension=16, embedding_regularizer=L2REG,
+                                                                    embedding_initializer='glorot_normal',
+                                                                    name='author_edu_work_status')
+
+"""
+5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
 """
 st_company_col = features['short_term_companies']
-st_company_emb_origin = nn.hash_lookup_embedding(inputs['short_term_companies'], 10000, 16,
-                                                 L2REG, 'glorot_normal', 'short_term_companies')  # (none, 5, 16)
+st_company_emb_origin = nn.hash_lookup_embedding(inputs=inputs['short_term_companies'], num_bins=10000,
+                                                 embedding_dimension=16,
+                                                 embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
+                                                 name='short_term_companies')  # (none, 5, 16)
 # softmax作用在最后一个维度, 从(none, 5) -> (none, 5, 1)
-# 使用 Lambda 层进行维度扩展
 st_companies_weights = layers.Softmax(axis=-1)(inputs['short_term_companies_weights'])  # (none, 5)
 st_companies_weights = nn.ExpandDimsLayer(-1)(st_companies_weights)  # (None, 5, 1)
-# (None, 5, 16) * (none, 5, 1) -> (none, 16) 将这5个向量加权求和
-st_companies_weights = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)
+# 将这5个向量加权求和  reduce((None,5,16) * (none,5,1))
+tensor_dict['st_companies_emb'] = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)  # (none, 16)
 # st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
 # st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
 
+
 """
-company_keyword (hash) (none, 3) 这个是公司的关键字
+company_keyword (hash) (none, 3) 这个是公司的关键字, 对公司向量求平均
 """
 company_keyword_col = features['company_keyword']
-company_keyword_origin = nn.hash_lookup_embedding(inputs['company_keyword'], 10000, 16,
-                                                  L2REG, 'glorot_normal', 'company_keyword')  # (none, 3, 16)
+company_keyword_origin = nn.hash_lookup_embedding(inputs=inputs['company_keyword'], num_bins=10000,
+                                                  embedding_dimension=16,
+                                                  embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
+                                                  name='company_keyword')  # (none, 3, 16)
 company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
-nn.reduce_mean_with_mask(company_keyword_origin, company_keyword_max_len_col, 3)
-# nn.reduce_mean_with_mask(company_keyword_origin, inputs['company_keyword_max_len'], 3)
+tensor_dict['company_keyword_emb'] = nn.ReduceMeanWithMask(3)(company_keyword_origin,
+                                                              inputs['company_keyword_max_len'])  # (none, 16)
