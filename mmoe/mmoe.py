@@ -7,7 +7,7 @@ import utils.nn_utils as nn
 
 from keras import layers
 
-## 可以去看 dataset 的 jyputer
+# 可以去看 dataset 的 jupyter
 dataset = data_process.train_test_dataset(1024)
 
 l2_reg = 0.0000025
