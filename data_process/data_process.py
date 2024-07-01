@@ -5,6 +5,7 @@ import tensorflow as tf
 import json
 from utils.tfrecord_util import read_tfrecord
 import pandas as pd
+import keras
 
 TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
 
@@ -91,3 +92,15 @@ def get_dataset_dataframe(batch_size):
     dataframe = pd.read_csv('../data/feature_data.csv')
     train_ds = df_to_dataset(dataframe, batch_size=batch_size)
     return train_ds
+
+
+def build_input_tensor():
+    current_dir = os.path.dirname(__file__)
+    json_file = os.path.join(current_dir, 'feature.json')
+    all_features = json.load(open(json_file))
+
+    inputs = {}
+    for key, value in all_features.items():
+        _type, _shape = TYPE_DICT[all_features[key][0]], all_features[key][1]
+        inputs[key] = keras.Input(shape=(_shape,), name=key, dtype=_type)
+    return inputs

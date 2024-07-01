@@ -33,10 +33,13 @@ GENDER_VOC = ["<nan>", "其他", "男", "女"]
 take_dataset = dataset.take(1)
 [features] = take_dataset
 
+# 给所有特征建立 tensor
+inputs = data_process.build_input_tensor()
+
 # (1,)
 gender_col = features['gender']
 gender_emb = nn.string_lookup_embedding(
-    inputs=gender_col,
+    inputs=inputs['gender'],
     voc_list=GENDER_VOC,
     embedding_dimension=16,
     embedding_regularizer=L2REG, embedding_initializer='glorot_normal', name='gender')
@@ -45,19 +48,23 @@ gender_emb = nn.string_lookup_embedding(
 short_term_company (hash) (none, 5) 代表五个公司的id
 """
 st_company_col = features['short_term_companies']
-st_company_emb_origin = nn.hash_lookup_embedding(st_company_col, 10000, 16,
-                                                 L2REG, 'glorot_normal', 'short_term_companies') # (none, 5, 16)
+st_company_emb_origin = nn.hash_lookup_embedding(inputs['short_term_companies'], 10000, 16,
+                                                 L2REG, 'glorot_normal', 'short_term_companies')  # (none, 5, 16)
 # softmax作用在最后一个维度, 从(none, 5) -> (none, 5, 1)
-st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
-# (None, 5, 16) -> (none, 16) 将这5个向量加权求和
-st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
+# 使用 Lambda 层进行维度扩展
+st_companies_weights = layers.Softmax(axis=-1)(inputs['short_term_companies_weights'])  # (none, 5)
+st_companies_weights = nn.ExpandDimsLayer(-1)(st_companies_weights)  # (None, 5, 1)
+# (None, 5, 16) * (none, 5, 1) -> (none, 16) 将这5个向量加权求和
+st_companies_weights = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)
+# st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
+# st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
 
 """
 company_keyword (hash) (none, 3) 这个是公司的关键字
 """
 company_keyword_col = features['company_keyword']
-company_keyword_origin = nn.hash_lookup_embedding(st_company_col, 10000, 16,
-                                                 L2REG, 'glorot_normal', 'company_keyword') # (none, 3, 16)
-company_keyword_max_len_col = features['company_keyword_max_len'] # (none, 1)
+company_keyword_origin = nn.hash_lookup_embedding(inputs['company_keyword'], 10000, 16,
+                                                  L2REG, 'glorot_normal', 'company_keyword')  # (none, 3, 16)
+company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
 nn.reduce_mean_with_mask(company_keyword_origin, company_keyword_max_len_col, 3)
-
+# nn.reduce_mean_with_mask(company_keyword_origin, inputs['company_keyword_max_len'], 3)

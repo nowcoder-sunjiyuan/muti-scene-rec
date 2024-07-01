@@ -2,7 +2,7 @@ from data_process import data_process
 import numpy as np
 import tensorflow as tf
 
-from keras import layers
+from keras import layers, Layer
 
 
 # 将输入经过 string_lookup再经过 embedding 转换
@@ -19,7 +19,9 @@ def string_lookup_embedding(inputs, voc_list, embedding_dimension, embedding_reg
 
     if embedding_output.shape[1] == 1:
         # dataset batch 后经过 lookup 和 embedding  (none, 1, 16)
-        embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
+        reshape_layer = layers.Reshape((embedding_output.shape[-1],))
+        embedding_output = reshape_layer(embedding_output)
+        # embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
     return embedding_output
 
 
@@ -32,18 +34,43 @@ def hash_lookup_embedding(inputs, num_bins, embedding_dimension, embedding_regul
                                        embeddings_regularizer=embedding_regularizer)
     embedding_output = embedding_layer(hash_layer(inputs))
     if embedding_output.shape[1] == 1:
-        embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
+        # dataset batch 后经过 lookup 和 embedding  (none, 1, 16)
+        reshape_layer = layers.Reshape((embedding_output.shape[-1],))
+        embedding_output = reshape_layer(embedding_output)
+        # embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
     return embedding_output
+
+
+class ExpandDimsLayer(Layer):
+    def __init__(self, axis, **kwargs):
+        super(ExpandDimsLayer, self).__init__(**kwargs)
+        self.axis = axis
+
+    def call(self, inputs):
+        return tf.expand_dims(inputs, axis=self.axis)
+
+    def compute_output_shape(self, input_shape):
+        if self.axis < 0:
+            self.axis = len(input_shape) + self.axis + 1
+        return input_shape[:self.axis] + (1,) + input_shape[self.axis:]
+
+
+class ReduceSumLayer(Layer):
+    def __init__(self, axis, **kwargs):
+        super(ReduceSumLayer, self).__init__(**kwargs)
+        self.axis = axis
+
+    def call(self, inputs):
+        return tf.reduce_sum(inputs, axis=self.axis)
+
+    def compute_output_shape(self, input_shape):
+        return input_shape[:self.axis] + input_shape[self.axis+1:]
 
 
 def reduce_mean_with_mask(inputs, valid_length, max_len, elem_type=tf.float32):
     # mask 是由 length 和 max_len 通过函数得到的
     embeddings = inputs
-    mask = get_mask(valid_length, max_len, elem_type)
+    mask = tf.reshape(tf.sequence_mask(valid_length, maxlen=max_len, dtype=elem_type), shape=(-1, max_len, 1))
     masked_embeddings = embeddings * mask
     summed = tf.reduce_sum(masked_embeddings, axis=1)
     return summed / tf.cast(valid_length, dtype=tf.float32)
-
-
-def get_mask(valid_length, max_len, elem_type=tf.float32):
-    return tf.reshape(tf.sequence_mask(valid_length, maxlen=max_len, dtype=elem_type), shape=(-1, max_len, 1))
