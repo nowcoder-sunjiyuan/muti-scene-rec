@@ -29,3 +29,31 @@ def dataset_to_csv(csv_url, dataset, feature_names):
             for i in range(batch_size):
                 sample_feature = {key: decode_if_bytes(features_numpy[key][i]) for key in feature_names}
                 writer.writerow(sample_feature)
+
+
+class MultiIODict(dict):
+    """
+    因为比较懒，不想写很多行，所以写了这个类，支持单行多输入输出
+    可以在[]中传入多个 key，返回一个 list
+    在为字典设置值时也可以传入多个 key 和 value，要求 key 和 value 的数量一致
+    Example:
+        a = MultiIODict()
+        a["a", "b"] = 1, 2
+        print(a["a", "b"])
+    """
+
+    def __getitem__(self, item):
+        if not isinstance(item, tuple):
+            return super().__getitem__(item)
+        res = []
+        for key in item:
+            res.append(super().__getitem__(key))
+        return res
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, tuple):
+            super().__setitem__(key, value)
+            return
+        assert len(key) == len(value), "key 和 value 数量不一致"
+        for each in zip(key, value):
+            super().__setitem__(*each)

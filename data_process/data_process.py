@@ -4,6 +4,7 @@ import sys
 import tensorflow as tf
 import json
 from utils.tfrecord_util import read_tfrecord
+import utils.base_tool as base_tool
 import pandas as pd
 import keras
 
@@ -99,7 +100,7 @@ def build_input_tensor():
     json_file = os.path.join(current_dir, 'feature.json')
     all_features = json.load(open(json_file))
 
-    inputs = {}
+    inputs = base_tool.MultiIODict({})
     for key, value in all_features.items():
         _type, _shape = TYPE_DICT[all_features[key][0]], all_features[key][1]
         inputs[key] = keras.Input(shape=(_shape,), name=key, dtype=_type)

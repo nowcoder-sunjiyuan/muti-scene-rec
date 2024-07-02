@@ -4,6 +4,7 @@ from data_process import data_process
 import numpy as np
 import tensorflow as tf
 import utils.nn_utils as nn
+import utils.base_tool as base_tool
 
 from keras import layers
 
@@ -30,6 +31,8 @@ CAREER_JOB1_1_VOC = ["<nan>", "11226", "11227", "11228", "11229", "11230", "1123
 SCHOOL_TYPE_VOC = ["<nan>", "211", "985", "一本", "二本", "初高中", "双一流", "海外", "海外QS_TOP100", "其他"]
 GENDER_VOC = ["<nan>", "其他", "男", "女"]
 EDU_WORK_STATUS_VOC = [0, 1, 2]
+WORK_YEAR_BOUND = [-3, -2, -1, 0, 1, 3, 5, 10]
+EDU_LEVEL_VOC = ["<nan>", "其他", "专科", "博士及以上", "学士", "硕士", "高中及以下"]
 
 SCHOOL_VOC_PATH = "../data_process/school_vocabulary.txt"
 SCHOOL_MAJOR_VOC_PATH = "../data_process/school_major_vocabulary.txt"
@@ -40,59 +43,80 @@ take_dataset = dataset.take(1)
 # 给所有特征建立 tensor
 inputs = data_process.build_input_tensor()
 
-# 最后tensor的结果dict
-tensor_dict = {}
+# 最后tensor的结果dict，这是一个可以多进多出的 tensor
+tensor_dict = base_tool.MultiIODict({})
 
 """
 基本的特征
 """
 # (none, 1)  -> (none, 16) 性别
-tensor_dict['gender'] = nn.string_lookup_embedding(inputs=inputs['gender'], voc_list=GENDER_VOC,
-                                                   embedding_dimension=16, embedding_regularizer=L2REG,
-                                                   embedding_initializer='glorot_normal', name='gender')
-# (none, 1)  -> (none, 16)
-tensor_dict['author_gender'] = nn.string_lookup_embedding(inputs=inputs['author_gender'], voc_list=GENDER_VOC,
-                                                          embedding_dimension=16, embedding_regularizer=L2REG,
-                                                          embedding_initializer='glorot_normal', name='gender')
+tensor_dict['gender', 'author_gender'] = nn.string_lookup_embedding(inputs=inputs['gender', 'author_gender'],
+                                                                    voc_list=GENDER_VOC, name='gender')
 # (none, 1)  -> (none, 16) 学校
-tensor_dict['school'] = nn.string_lookup_embedding(inputs=inputs['school'], voc_list=SCHOOL_TYPE_VOC,
-                                                   embedding_dimension=16, embedding_regularizer=L2REG,
-                                                   embedding_initializer='glorot_normal', name='school')
-# (none, 1)  -> (none, 16)
-tensor_dict['author_school'] = nn.string_lookup_embedding(inputs=inputs['author_school'], voc_list=SCHOOL_TYPE_VOC,
-                                                          embedding_dimension=16, embedding_regularizer=L2REG,
-                                                          embedding_initializer='glorot_normal', name='author_school')
+tensor_dict['school', 'author_school'] = nn.string_lookup_embedding(inputs=inputs['school', 'author_school'],
+                                                                    voc_list=SCHOOL_TYPE_VOC, name='school')
 # (none, 1) -> (none, 16) 专业
-tensor_dict['school_major'] = nn.string_lookup_embedding(inputs=inputs['school_major'], voc_list=SCHOOL_MAJOR_VOC_PATH,
-                                                         embedding_dimension=16, embedding_regularizer=L2REG,
-                                                         embedding_initializer='glorot_normal', name='school_major')
-# (none, 1) -> (none, 16)
-tensor_dict['author_school_major'] = nn.string_lookup_embedding(inputs=inputs['author_school_major'],
-                                                                voc_list=SCHOOL_MAJOR_VOC_PATH,
-                                                                embedding_dimension=16, embedding_regularizer=L2REG,
-                                                                embedding_initializer='glorot_normal',
-                                                                name='school_major')
+tensor_dict['school_major', 'author_school_major'] = nn.string_lookup_embedding(
+    inputs=inputs['school_major', 'author_school_major'],
+    voc_list=SCHOOL_MAJOR_VOC_PATH,
+    name='school_major'
+)
 # (none, 1) -> (none, 16) 学校类型，211，985
-tensor_dict['school_type'] = nn.string_lookup_embedding(inputs=inputs['school_type'],
-                                                        voc_list=SCHOOL_TYPE_VOC,
-                                                        embedding_dimension=16, embedding_regularizer=L2REG,
-                                                        embedding_initializer='glorot_normal',
-                                                        name='school_major')
-tensor_dict['author_school_type'] = nn.string_lookup_embedding(inputs=inputs['author_school_type'],
-                                                               voc_list=SCHOOL_TYPE_VOC,
-                                                               embedding_dimension=16, embedding_regularizer=L2REG,
-                                                               embedding_initializer='glorot_normal',
-                                                               name='school_major')
-edu_work_status_col = features['edu_work_status']
-tensor_dict['edu_work_status'] = nn.integer_lookup_embedding(inputs=edu_work_status_col, voc_list=EDU_WORK_STATUS_VOC,
-                                                             embedding_dimension=16, embedding_regularizer=L2REG,
-                                                             embedding_initializer='glorot_normal',
-                                                             name='edu_work_status')
-tensor_dict['author_edu_work_status'] = nn.integer_lookup_embedding(inputs=inputs['author_edu_work_status'],
-                                                                    voc_list=EDU_WORK_STATUS_VOC,
-                                                                    embedding_dimension=16, embedding_regularizer=L2REG,
-                                                                    embedding_initializer='glorot_normal',
-                                                                    name='author_edu_work_status')
+tensor_dict['school_type', 'author_school_type'] = nn.string_lookup_embedding(
+    inputs=inputs['school_type', 'author_school_type'],
+    voc_list=SCHOOL_TYPE_VOC,
+    name='school_major'
+)
+# (none, 1) -> (none, 16) ??? 工作状态？？暂时不确定
+tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
+    inputs=inputs['edu_work_status', 'author_edu_work_status'],
+    voc_list=EDU_WORK_STATUS_VOC,
+    name='edu_work_status'
+)
+
+# 一级意向职位 (none, 1) -> (none, 16)
+tensor_dict['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'] = nn.string_lookup_embedding(
+    inputs=inputs['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'],
+    voc_list=CAREER_JOB1_1_VOC,
+    name='career_job1_1'
+)
+
+# 二级意向职位 (none, 1) -> (none, 16)
+cj2 = ("career_job1_2", "career_job2_2", "career_job3_2", "author_career_job1_2", "manual_career_job_2")
+cj2 = tuple(fea for fea in cj2 if fea in inputs)
+tensor_dict[cj2] = nn.string_lookup_embedding(
+    inputs=inputs[cj2],
+    voc_list=CAREER_JOB1_1_VOC,
+    name='career_job1_2'
+)
+
+# 三级意向职位 (none, 1) -> (none, 16)
+cj3 = ("career_job1_3", "career_job2_3", "career_job3_3", "author_career_job1_3")
+cj3 = tuple(fea for fea in cj3 if fea in inputs)
+tensor_dict[cj3] = nn.hash_lookup_embedding(
+    inputs=inputs[cj3],
+    name="career_job1_3",
+    num_bins=1000,
+)
+
+# 工作时间，毕业时间距离今年的距离，可能为负数
+work_year_embedding_layer = layers.Embedding(
+    input_dim=len(WORK_YEAR_BOUND) + 1,
+    output_dim=16,
+    embeddings_regularizer=L2REG,
+    embeddings_initializer='glorot_normal',
+    name='work_year'
+)
+Reshape_layer = layers.Reshape((16,))
+tensor_dict["work_year"] = Reshape_layer(work_year_embedding_layer(inputs["work_year"]))
+tensor_dict["author_work_year"] = Reshape_layer(work_year_embedding_layer(inputs["author_work_year"]))
+
+# 学历, 专科，本科，硕士，(none, 1) -> (none, 16)
+tensor_dict["edu_level", "author_edu_level"] = nn.string_lookup_embedding(
+    inputs=inputs["edu_level", "author_edu_level"],
+    name="edu_level",
+    voc_list=EDU_LEVEL_VOC
+)
 
 """
 5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id

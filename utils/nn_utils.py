@@ -1,13 +1,17 @@
 from data_process import data_process
 import numpy as np
 import tensorflow as tf
+import keras
 
 from keras import layers, Layer
 
+l2_reg = 0.0000025
+L2REG = keras.regularizers.L2(l2_reg)
+
 
 # 将输入经过 string_lookup再经过 embedding 转换
-def string_lookup_embedding(inputs, voc_list, embedding_dimension, embedding_regularizer, embedding_initializer,
-                            name):
+def string_lookup_embedding(inputs, voc_list, embedding_dimension=16, embedding_regularizer=L2REG,
+                            embedding_initializer='glorot_normal', name=''):
     string_lookup_layer = layers.StringLookup(vocabulary=voc_list,
                                               name=f"{name}_lookup_layer")
     embedding_layer = layers.Embedding(input_dim=len(string_lookup_layer.get_vocabulary()) + 1,
@@ -15,33 +19,42 @@ def string_lookup_embedding(inputs, voc_list, embedding_dimension, embedding_reg
                                        embeddings_regularizer=embedding_regularizer,
                                        embeddings_initializer=embedding_initializer,
                                        name=f"{name}_embedding_layer")
-    embedding_output = embedding_layer(string_lookup_layer(inputs))
 
-    if embedding_output.shape[1] == 1:
-        # dataset batch 后经过 lookup 和 embedding  (none, 1, 16)
-        reshape_layer = layers.Reshape((embedding_output.shape[-1],))
-        embedding_output = reshape_layer(embedding_output)
-        # embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
-    return embedding_output
+    shared = isinstance(inputs, (tuple, list))
+    if shared:
+        res = []
+        for each in inputs:
+            embedding_output = _embedding_res_check_reshape(embedding_layer(string_lookup_layer(each)))
+            res.append(embedding_output)
+        return res
+    else:
+        embedding_output = _embedding_res_check_reshape(embedding_layer(string_lookup_layer(inputs)))
+        return embedding_output
 
 
 # 将输入经过 hash再经过 embedding
-def hash_lookup_embedding(inputs, num_bins, embedding_dimension, embedding_regularizer, embedding_initializer, name):
+def hash_lookup_embedding(inputs, num_bins, embedding_dimension=16, embedding_regularizer=L2REG,
+                          embedding_initializer='glorot_normal', name=''):
     hash_layer = layers.Hashing(num_bins=num_bins, name=f"{name}_hash_layer")
     embedding_layer = layers.Embedding(input_dim=num_bins,
                                        output_dim=embedding_dimension,
                                        embeddings_initializer=embedding_initializer,
                                        embeddings_regularizer=embedding_regularizer)
-    embedding_output = embedding_layer(hash_layer(inputs))
-    if embedding_output.shape[1] == 1:
-        # dataset batch 后经过 lookup 和 embedding  (none, 1, 16)
-        reshape_layer = layers.Reshape((embedding_output.shape[-1],))
-        embedding_output = reshape_layer(embedding_output)
-        # embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
-    return embedding_output
+
+    shared = isinstance(inputs, (tuple, list))
+    if shared:
+        res = []
+        for each in inputs:
+            embedding_output = _embedding_res_check_reshape(embedding_layer(hash_layer(each)))
+            res.append(embedding_output)
+        return res
+    else:
+        embedding_output = _embedding_res_check_reshape(embedding_layer(hash_layer(inputs)))
+        return embedding_output
 
 
-def integer_lookup_embedding(inputs, voc_list, embedding_dimension, embedding_regularizer, embedding_initializer, name):
+def integer_lookup_embedding(inputs, voc_list, embedding_dimension=16, embedding_regularizer=L2REG,
+                             embedding_initializer='glorot_normal', name=''):
     integer_lookup_layer = layers.IntegerLookup(vocabulary=voc_list,
                                                 name=f"{name}_lookup_layer")
     embedding_layer = layers.Embedding(input_dim=len(integer_lookup_layer.get_vocabulary()) + 1,
@@ -49,13 +62,28 @@ def integer_lookup_embedding(inputs, voc_list, embedding_dimension, embedding_re
                                        embeddings_regularizer=embedding_regularizer,
                                        embeddings_initializer=embedding_initializer,
                                        name=f"{name}_embedding_layer")
-    embedding_output = embedding_layer(integer_lookup_layer(inputs))
+    shared = isinstance(inputs, (tuple, list))
+    if shared:
+        res = []
+        for each in inputs:
+            embedding_output = _embedding_res_check_reshape(embedding_layer(integer_lookup_layer(each)))
+            res.append(embedding_output)
+        return res
+    else:
+        embedding_output = _embedding_res_check_reshape(embedding_layer(integer_lookup_layer(inputs)))
+        return embedding_output
 
-    if embedding_output.shape[1] == 1:
+
+# 对embedding结果进行检测和reshape
+def _embedding_res_check_reshape(embedding_res):
+    if embedding_res.shape[1] == 1:
         # dataset batch 后经过 lookup 和 embedding  (none, 1, 16)
-        reshape_layer = layers.Reshape((embedding_output.shape[-1],))
-        embedding_output = reshape_layer(embedding_output)
-    return embedding_output
+        reshape_layer = layers.Reshape((embedding_res.shape[-1],))
+        embedding_res = reshape_layer(embedding_res)
+        return embedding_res
+        # embedding_output = tf.reshape(embedding_output, [-1, embedding_output.shape[-1]])
+    else:
+        return embedding_res
 
 
 class ExpandDimsLayer(Layer):
