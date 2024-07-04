@@ -1,148 +1,248 @@
-import keras.src.layers
+import keras.src.ops
 
-from data_process import data_process
-import numpy as np
+import feature_representation.feature_representation as fr
+from keras import layers, InputSpec
+from keras import activations, initializers, regularizers, constraints
 import tensorflow as tf
-import utils.nn_utils as nn
-import utils.base_tool as base_tool
 
-from keras import layers
+tensor_dict = fr.get_basic_feature_representation()
+feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
 
-# 可以去看 dataset 的 jupyter
-dataset = data_process.train_test_dataset(1024)
 
-l2_reg = 0.0000025
-L2REG = keras.regularizers.L2(l2_reg)
+class MMoE(layers.Layer):
+    """
+    Multi-gate Mixture-of-Experts model.
+    """
 
-TAXONOMY1_VOC = ["<nan>", "10010", "10011", "10012", "10013", "10014", "10015", "10053", "10064", "10016", "-1"]
-TAXONOMY2_VOC = ["<nan>", "10017", "10018", "10019", "10020", "10061", "10054", "10021", "10022", "10023", "10024",
-                 "10025", "10026", "10034", "10035", "10067", "10186", "10030", "10031", "10032", "10060", "10066",
-                 "10086", "10121", "10065", "10187", "10059", "10033", "10057", "10058", "10080", "10081", "10082",
-                 "10079", "10078", "10075", "10051", "10083", "10047", "10048", "10072", "10049", "10050", "10074",
-                 "10071", "10073", "10122", "10055", "10056", "-1"]
-CAREER_JOB1_2_VOC = ["<nan>", "11200", "11201", "11202", "11203", "11204", "11205", "11206", "11207", "11208",
-                     "11209", "11210", "11211", "11212", "11213", "11214", "11215", "11216", "11217", "11218",
-                     "11219", "11220", "11221", "11222", "11223", "11224", "11225", "11240", "11260", "11265",
-                     "11266", "142700", "142961", "143069", "143743", "143789", "143790", "143802", "143811",
-                     "143818", "143833", "143843", "143846", "143849", "143850", "143883", "143895", "143909",
-                     "-1"]
-CAREER_JOB1_1_VOC = ["<nan>", "11226", "11227", "11228", "11229", "11230", "11231", "11232", "11233", "11264", "142960",
-                     "143750", "143848", "143882", "-1"]
-SCHOOL_TYPE_VOC = ["<nan>", "211", "985", "一本", "二本", "初高中", "双一流", "海外", "海外QS_TOP100", "其他"]
-GENDER_VOC = ["<nan>", "其他", "男", "女"]
-EDU_WORK_STATUS_VOC = [0, 1, 2]
-WORK_YEAR_BOUND = [-3, -2, -1, 0, 1, 3, 5, 10]
-EDU_LEVEL_VOC = ["<nan>", "其他", "专科", "博士及以上", "学士", "硕士", "高中及以下"]
+    def __init__(self,
+                 units,
+                 num_experts,
+                 num_tasks,
+                 use_expert_bias=True,
+                 use_gate_bias=True,
+                 expert_activation='relu',
+                 gate_activation='softmax',
+                 expert_bias_initializer='zeros',
+                 gate_bias_initializer='zeros',
+                 expert_bias_regularizer=None,
+                 gate_bias_regularizer=None,
+                 expert_bias_constraint=None,
+                 gate_bias_constraint=None,
+                 expert_kernel_initializer='VarianceScaling',
+                 gate_kernel_initializer='VarianceScaling',
+                 expert_kernel_regularizer=None,
+                 gate_kernel_regularizer=None,
+                 expert_kernel_constraint=None,
+                 gate_kernel_constraint=None,
+                 activity_regularizer=None,
+                 **kwargs):
+        """
+         Method for instantiating MMoE layer.
 
-SCHOOL_VOC_PATH = "../data_process/school_vocabulary.txt"
-SCHOOL_MAJOR_VOC_PATH = "../data_process/school_major_vocabulary.txt"
+        :param units: 专家网络的隐藏单元的数量
+        :param num_experts: 专家的数量
+        :param num_tasks: 任务的数量
+        :param use_expert_bias: Boolean to indicate the usage of bias in the expert weights
+        :param use_gate_bias: Boolean to indicate the usage of bias in the gate weights
+        :param expert_activation: Activation function of the expert weights
+        :param gate_activation: Activation function of the gate weights
+        :param expert_bias_initializer: Initializer for the expert bias
+        :param gate_bias_initializer: Initializer for the gate bias
+        :param expert_bias_regularizer: Regularizer for the expert bias
+        :param gate_bias_regularizer: Regularizer for the gate bias
+        :param expert_bias_constraint: Constraint for the expert bias
+        :param gate_bias_constraint: Constraint for the gate bias
+        :param expert_kernel_initializer: Initializer for the expert weights
+        :param gate_kernel_initializer: Initializer for the gate weights
+        :param expert_kernel_regularizer: Regularizer for the expert weights
+        :param gate_kernel_regularizer: Regularizer for the gate weights
+        :param expert_kernel_constraint: Constraint for the expert weights
+        :param gate_kernel_constraint: Constraint for the gate weights
+        :param activity_regularizer: Regularizer for the activity
+        :param kwargs: Additional keyword arguments for the Layer class
+        """
+        # Hidden nodes parameter
+        self.units = units
+        self.num_experts = num_experts
+        self.num_tasks = num_tasks
 
-take_dataset = dataset.take(1)
-[features] = take_dataset
+        # Weight parameter
+        self.expert_kernels = None
+        self.gate_kernels = None
+        self.expert_kernel_initializer = initializers.get(expert_kernel_initializer)
+        self.gate_kernel_initializer = initializers.get(gate_kernel_initializer)
+        self.expert_kernel_regularizer = regularizers.get(expert_kernel_regularizer)
+        self.gate_kernel_regularizer = regularizers.get(gate_kernel_regularizer)
+        self.expert_kernel_constraint = constraints.get(expert_kernel_constraint)
+        self.gate_kernel_constraint = constraints.get(gate_kernel_constraint)
 
-# 给所有特征建立 tensor
-inputs = data_process.build_input_tensor()
+        # Activation parameter
+        self.expert_activation = activations.get(expert_activation)
+        self.gate_activation = activations.get(gate_activation)
 
-# 最后tensor的结果dict，这是一个可以多进多出的 tensor
-tensor_dict = base_tool.MultiIODict({})
+        # Bias parameter
+        self.expert_bias = None
+        self.gate_bias = None
+        self.use_expert_bias = use_expert_bias
+        self.use_gate_bias = use_gate_bias
+        self.expert_bias_initializer = initializers.get(expert_bias_initializer)
+        self.gate_bias_initializer = initializers.get(gate_bias_initializer)
+        self.expert_bias_regularizer = regularizers.get(expert_bias_regularizer)
+        self.gate_bias_regularizer = regularizers.get(gate_bias_regularizer)
+        self.expert_bias_constraint = constraints.get(expert_bias_constraint)
+        self.gate_bias_constraint = constraints.get(gate_bias_constraint)
 
-"""
-基本的特征
-"""
-# (none, 1)  -> (none, 16) 性别
-tensor_dict['gender', 'author_gender'] = nn.string_lookup_embedding(inputs=inputs['gender', 'author_gender'],
-                                                                    voc_list=GENDER_VOC, name='gender')
-# (none, 1)  -> (none, 16) 学校
-tensor_dict['school', 'author_school'] = nn.string_lookup_embedding(inputs=inputs['school', 'author_school'],
-                                                                    voc_list=SCHOOL_TYPE_VOC, name='school')
-# (none, 1) -> (none, 16) 专业
-tensor_dict['school_major', 'author_school_major'] = nn.string_lookup_embedding(
-    inputs=inputs['school_major', 'author_school_major'],
-    voc_list=SCHOOL_MAJOR_VOC_PATH,
-    name='school_major'
+        # Activity parameter
+        self.activity_regularizer = regularizers.get(activity_regularizer)
+
+        # Keras parameter
+        self.input_spec = InputSpec(min_ndim=2)  # 至少两个维度
+        self.supports_masking = True
+
+        super(MMoE, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        """
+        Method for creating the layer weights.
+
+        :param input_shape: Keras tensor (future input to layer)
+                            or list/tuple of Keras tensors to reference
+                            for weight shape computations
+        """
+        assert input_shape is not None and len(input_shape) >= 2
+
+        input_dimension = input_shape[-1]
+
+        # 专家网络的参数，每个专家：(输入维度 * 每个专家的unit数量)
+        self.expert_kernels = self.add_weight(
+            name='expert_kernel',
+            shape=(input_dimension, self.units, self.num_experts),
+            initializer=self.expert_kernel_initializer,
+            regularizer=self.expert_kernel_regularizer,
+            constraint=self.expert_kernel_constraint,
+        )
+
+        # 每个专家的偏置bias：每个专家：(units, )
+        if self.use_expert_bias:
+            self.expert_bias = self.add_weight(
+                name='expert_bias',
+                shape=(self.units, self.num_experts),
+                initializer=self.expert_bias_initializer,
+                regularizer=self.expert_bias_regularizer,
+                constraint=self.expert_bias_constraint,
+            )
+
+        # Initialize gate weights (number of input features * number of experts * number of tasks)
+        self.gate_kernels = [self.add_weight(
+            name='gate_kernel_task_{}'.format(i),
+            shape=(input_dimension, self.num_experts),
+            initializer=self.gate_kernel_initializer,
+            regularizer=self.gate_kernel_regularizer,
+            constraint=self.gate_kernel_constraint
+        ) for i in range(self.num_tasks)]
+
+        # Initialize gate bias (number of experts * number of tasks)
+        if self.use_gate_bias:
+            self.gate_bias = [self.add_weight(
+                name='gate_bias_task_{}'.format(i),
+                shape=(self.num_experts,),
+                initializer=self.gate_bias_initializer,
+                regularizer=self.gate_bias_regularizer,
+                constraint=self.gate_bias_constraint
+            ) for i in range(self.num_tasks)]
+
+        self.input_spec = InputSpec(min_ndim=2, axes={-1: input_dimension})
+
+        super(MMoE, self).build(input_shape)
+
+    def call(self, inputs, **kwargs):
+        """
+        Method for the forward function of the layer.
+
+        :param inputs: Input tensor
+        :param kwargs: Additional keyword arguments for the base method
+        :return: A tensor
+        """
+        gate_outputs = []
+        final_outputs = []
+
+        # f_{i}(x) = activation(W_{i} * x + b), 论文中激活函数是ReLU
+        expert_outputs = tf.tensordot(a=inputs, b=self.expert_kernels, axes=1)  # (none, 4, 8)
+        # 添加偏置，先将偏置调整成可以相加的形状
+        if self.use_expert_bias:
+            expert_bias_reshaped = tf.reshape(self.expert_bias, (1, self.units, self.num_experts))
+            expert_outputs += expert_bias_reshaped  # 广播机制，(none, 4, 8) 与 偏置 (1, 4, 8)相加，右对齐后，扩展
+        expert_outputs = self.expert_activation(expert_outputs)
+
+        # g^{k}(x) = activation(W_{gk} * x + b), where activation is softmax according to the paper
+        for index, gate_kernel in enumerate(self.gate_kernels):
+            gate_output = keras.ops.dot(x1=inputs, x2=gate_kernel)  # (none, feature_dim) * (feature_dim, 8) 每个门控输出8个值，控制8个专家的权重
+            if self.use_gate_bias:
+                gate_output = tf.nn.bias_add(value=gate_output, bias=self.gate_bias[index])  # (none, 8) + (8,) 这个会广播机制进行相加
+            gate_output = self.gate_activation(gate_output)  # (none, 8)
+            gate_outputs.append(gate_output)
+
+        # f^{k}(x) = sum_{i=1}^{n}(g^{k}(x)_{i} * f_{i}(x))
+        for gate_output in gate_outputs:
+            expanded_gate_output = tf.expand_dims(gate_output, axis=1)  # (none, 1, 8)
+            weighted_expert_output = expert_outputs * tf.nn.repeat_elements(expanded_gate_output, self.units, axis=1)
+            final_outputs.append(tf.nn.sum(weighted_expert_output, axis=2))
+
+        return final_outputs
+
+    def compute_output_shape(self, input_shape):
+        """
+        Method for computing the output shape of the MMoE layer.
+
+        :param input_shape: Shape tuple (tuple of integers)
+        :return: List of input shape tuple where the size of the list is equal to the number of tasks
+        """
+        assert input_shape is not None and len(input_shape) >= 2
+
+        output_shape = list(input_shape)
+        output_shape[-1] = self.units
+        output_shape = tuple(output_shape)
+
+        return [output_shape for _ in range(self.num_tasks)]
+
+    def get_config(self):
+        """
+        Method for returning the configuration of the MMoE layer.
+
+        :return: Config dictionary
+        """
+        config = {
+            'units': self.units,
+            'num_experts': self.num_experts,
+            'num_tasks': self.num_tasks,
+            'use_expert_bias': self.use_expert_bias,
+            'use_gate_bias': self.use_gate_bias,
+            'expert_activation': activations.serialize(self.expert_activation),
+            'gate_activation': activations.serialize(self.gate_activation),
+            'expert_bias_initializer': initializers.serialize(self.expert_bias_initializer),
+            'gate_bias_initializer': initializers.serialize(self.gate_bias_initializer),
+            'expert_bias_regularizer': regularizers.serialize(self.expert_bias_regularizer),
+            'gate_bias_regularizer': regularizers.serialize(self.gate_bias_regularizer),
+            'expert_bias_constraint': constraints.serialize(self.expert_bias_constraint),
+            'gate_bias_constraint': constraints.serialize(self.gate_bias_constraint),
+            'expert_kernel_initializer': initializers.serialize(self.expert_kernel_initializer),
+            'gate_kernel_initializer': initializers.serialize(self.gate_kernel_initializer),
+            'expert_kernel_regularizer': regularizers.serialize(self.expert_kernel_regularizer),
+            'gate_kernel_regularizer': regularizers.serialize(self.gate_kernel_regularizer),
+            'expert_kernel_constraint': constraints.serialize(self.expert_kernel_constraint),
+            'gate_kernel_constraint': constraints.serialize(self.gate_kernel_constraint),
+            'activity_regularizer': regularizers.serialize(self.activity_regularizer)
+        }
+        base_config = super(MMoE, self).get_config()
+
+        return dict(list(base_config.items()) + list(config.items()))
+
+
+mmoe_layer = MMoE(
+    units=4,
+    num_experts=8,
+    num_tasks=1
 )
-# (none, 1) -> (none, 16) 学校类型，211，985
-tensor_dict['school_type', 'author_school_type'] = nn.string_lookup_embedding(
-    inputs=inputs['school_type', 'author_school_type'],
-    voc_list=SCHOOL_TYPE_VOC,
-    name='school_major'
-)
-# (none, 1) -> (none, 16) ??? 工作状态？？暂时不确定
-tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
-    inputs=inputs['edu_work_status', 'author_edu_work_status'],
-    voc_list=EDU_WORK_STATUS_VOC,
-    name='edu_work_status'
-)
-
-# 一级意向职位 (none, 1) -> (none, 16)
-tensor_dict['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'] = nn.string_lookup_embedding(
-    inputs=inputs['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'],
-    voc_list=CAREER_JOB1_1_VOC,
-    name='career_job1_1'
-)
-
-# 二级意向职位 (none, 1) -> (none, 16)
-cj2 = ("career_job1_2", "career_job2_2", "career_job3_2", "author_career_job1_2", "manual_career_job_2")
-cj2 = tuple(fea for fea in cj2 if fea in inputs)
-tensor_dict[cj2] = nn.string_lookup_embedding(
-    inputs=inputs[cj2],
-    voc_list=CAREER_JOB1_1_VOC,
-    name='career_job1_2'
-)
-
-# 三级意向职位 (none, 1) -> (none, 16)
-cj3 = ("career_job1_3", "career_job2_3", "career_job3_3", "author_career_job1_3")
-cj3 = tuple(fea for fea in cj3 if fea in inputs)
-tensor_dict[cj3] = nn.hash_lookup_embedding(
-    inputs=inputs[cj3],
-    name="career_job1_3",
-    num_bins=1000,
-)
-
-# 工作时间，毕业时间距离今年的距离，可能为负数
-work_year_embedding_layer = layers.Embedding(
-    input_dim=len(WORK_YEAR_BOUND) + 1,
-    output_dim=16,
-    embeddings_regularizer=L2REG,
-    embeddings_initializer='glorot_normal',
-    name='work_year'
-)
-Reshape_layer = layers.Reshape((16,))
-tensor_dict["work_year"] = Reshape_layer(work_year_embedding_layer(inputs["work_year"]))
-tensor_dict["author_work_year"] = Reshape_layer(work_year_embedding_layer(inputs["author_work_year"]))
-
-# 学历, 专科，本科，硕士，(none, 1) -> (none, 16)
-tensor_dict["edu_level", "author_edu_level"] = nn.string_lookup_embedding(
-    inputs=inputs["edu_level", "author_edu_level"],
-    name="edu_level",
-    voc_list=EDU_LEVEL_VOC
-)
-
-"""
-5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
-"""
-st_company_col = features['short_term_companies']
-st_company_emb_origin = nn.hash_lookup_embedding(inputs=inputs['short_term_companies'], num_bins=10000,
-                                                 embedding_dimension=16,
-                                                 embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
-                                                 name='short_term_companies')  # (none, 5, 16)
-# softmax作用在最后一个维度, 从(none, 5) -> (none, 5, 1)
-st_companies_weights = layers.Softmax(axis=-1)(inputs['short_term_companies_weights'])  # (none, 5)
-st_companies_weights = nn.ExpandDimsLayer(-1)(st_companies_weights)  # (None, 5, 1)
-# 将这5个向量加权求和  reduce((None,5,16) * (none,5,1))
-tensor_dict['st_companies_emb'] = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)  # (none, 16)
-# st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
-# st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
-
-
-"""
-company_keyword (hash) (none, 3) 这个是公司的关键字, 对公司向量求平均
-"""
-company_keyword_col = features['company_keyword']
-company_keyword_origin = nn.hash_lookup_embedding(inputs=inputs['company_keyword'], num_bins=10000,
-                                                  embedding_dimension=16,
-                                                  embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
-                                                  name='company_keyword')  # (none, 3, 16)
-company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
-tensor_dict['company_keyword_emb'] = nn.ReduceMeanWithMask(3)(company_keyword_origin,
-                                                              inputs['company_keyword_max_len'])  # (none, 16)
+tensor_dict = fr.get_basic_feature_representation_case()
+feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
+mmoe_output = mmoe_layer(feature_tensor)
