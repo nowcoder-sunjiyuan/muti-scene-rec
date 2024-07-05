@@ -4,6 +4,7 @@ import feature_representation.feature_representation as fr
 from keras import layers, InputSpec
 from keras import activations, initializers, regularizers, constraints
 import tensorflow as tf
+import utils.nn_utils as nn
 
 tensor_dict = fr.get_basic_feature_representation()
 feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
@@ -42,10 +43,10 @@ class MMoE(layers.Layer):
         :param units: 专家网络的隐藏单元的数量
         :param num_experts: 专家的数量
         :param num_tasks: 任务的数量
-        :param use_expert_bias: Boolean to indicate the usage of bias in the expert weights
-        :param use_gate_bias: Boolean to indicate the usage of bias in the gate weights
-        :param expert_activation: Activation function of the expert weights
-        :param gate_activation: Activation function of the gate weights
+        :param use_expert_bias: 专家网络是否使用 bias
+        :param use_gate_bias: 门控网络是否使用 bias
+        :param expert_activation: 专家网络的激活函数
+        :param gate_activation: 门控网络的激活函数
         :param expert_bias_initializer: Initializer for the expert bias
         :param gate_bias_initializer: Initializer for the gate bias
         :param expert_bias_regularizer: Regularizer for the expert bias
@@ -172,9 +173,9 @@ class MMoE(layers.Layer):
         if self.use_expert_bias:
             expert_bias_reshaped = tf.reshape(self.expert_bias, (1, self.units, self.num_experts))
             expert_outputs += expert_bias_reshaped  # 广播机制，(none, 4, 8) 与 偏置 (1, 4, 8)相加，右对齐后，扩展
-        expert_outputs = self.expert_activation(expert_outputs)
+        expert_outputs = self.expert_activation(expert_outputs)  # (none, 4, 8) 8个专家每个输出(none, 4)
 
-        # g^{k}(x) = activation(W_{gk} * x + b), where activation is softmax according to the paper
+        # g^{k}(x) = activation(W_{gk} * x + b), 激活函数softmax
         for index, gate_kernel in enumerate(self.gate_kernels):
             gate_output = keras.ops.dot(x1=inputs, x2=gate_kernel)  # (none, feature_dim) * (feature_dim, 8) 每个门控输出8个值，控制8个专家的权重
             if self.use_gate_bias:
@@ -184,11 +185,12 @@ class MMoE(layers.Layer):
 
         # f^{k}(x) = sum_{i=1}^{n}(g^{k}(x)_{i} * f_{i}(x))
         for gate_output in gate_outputs:
+            # 8个门控(none, 8), 构造成 4 组权重，然后元素级乘法后再相加
             expanded_gate_output = tf.expand_dims(gate_output, axis=1)  # (none, 1, 8)
-            weighted_expert_output = expert_outputs * tf.nn.repeat_elements(expanded_gate_output, self.units, axis=1)
-            final_outputs.append(tf.nn.sum(weighted_expert_output, axis=2))
-
-        return final_outputs
+            expanded_gate_output = tf.repeat(expanded_gate_output, self.units, axis=1)  # (none, 4, 8)
+            weighted_expert_output = expert_outputs * expanded_gate_output  # (none, 4, 8) * (none, 4, 8) 元素级乘法，(none, 4, 8)
+            final_outputs.append(tf.reduce_sum(weighted_expert_output, axis=-1))  # (none, 4) 最后一个维度求和，这样就得到了8个专家网络最后的输出的和
+        return final_outputs  # [(none, 4), (none, 4)...]
 
     def compute_output_shape(self, input_shape):
         """
@@ -246,3 +248,6 @@ mmoe_layer = MMoE(
 tensor_dict = fr.get_basic_feature_representation_case()
 feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
 mmoe_output = mmoe_layer(feature_tensor)
+
+fully_output = nn.FullyConnectedTower([64, 32, 1], 'test_tower', 'relu', 'sigmoid')(feature_tensor)
+print(fully_output)

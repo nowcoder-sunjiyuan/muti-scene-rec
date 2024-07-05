@@ -2,6 +2,7 @@ from data_process import data_process
 import numpy as np
 import tensorflow as tf
 import keras
+from keras import activations, initializers, regularizers, constraints
 
 from keras import layers, Layer
 
@@ -132,3 +133,67 @@ class ReduceMeanWithMask(Layer):
 
     def compute_output_shape(self, input_shape):
         return input_shape[0], input_shape[2]
+
+
+class FullyConnectedTower(keras.layers.Layer):
+    """
+    若干个全连接层组成的塔
+    """
+
+    def __init__(self,
+                 tower_units: list,
+                 tower_name: str,
+                 hidden_activation,
+                 output_activation=None,
+                 regularizer=keras.regularizers.L2(0.00001),
+                 use_bn=True,
+                 dropout=0.0,
+                 seed=2023,
+                 **kwargs):
+        self.tower_units = tower_units
+        self.hidden_activation = hidden_activation
+        self.output_activation = output_activation
+        self.regularizer = regularizer
+        self.use_bn = use_bn
+        self.tower_name = tower_name
+        self.seed = seed
+        self.dropout = dropout
+
+        self.kernels = None
+        self.activations = None
+        if self.use_bn:
+            self.batch_normalizations = None
+        self.dropout_layers = None
+
+        super(FullyConnectedTower, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+
+        self.activations = [activations.get(self.hidden_activation) for _ in range(len(self.tower_units) - 1)] + \
+                           [activations.get(self.output_activation)]
+
+        self.kernels = [layers.Dense(self.tower_units[i],
+                                     kernel_initializer=keras.initializers.glorot_normal(seed=self.seed),
+                                     kernel_regularizer=self.regularizer) for i in range(len(self.tower_units))]
+
+        if self.use_bn:
+            self.batch_normalizations = [keras.layers.BatchNormalization() for i in range(len(self.tower_units))]
+
+        if self.dropout > 0.0:
+            self.dropout_layers = [keras.layers.Dropout(self.dropout) for i in range(len(self.tower_units))]
+
+        super(FullyConnectedTower, self).build(input_shape)
+
+    def call(self, inputs, training=None, **kwargs):
+        tower_input = inputs
+        for i in range(len(self.tower_units)):
+            cur = self.kernels[i](tower_input)
+            if self.use_bn:
+                cur = self.batch_normalizations[i](cur, training=training)
+            if self.activations[i] is not None:
+                cur = self.activations[i](cur)
+            if self.dropout > 0.0:
+                cur = self.dropout_layers[i](cur)
+            tower_input = cur
+
+        return tower_input
