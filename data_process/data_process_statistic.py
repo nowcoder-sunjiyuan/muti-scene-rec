@@ -5,7 +5,7 @@ import json
 import data_process
 
 
-dataset = data_process.train_test_dataset(1024)
+dataset, test_dataset = data_process.train_test_dataset(1024)
 TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
 
 # feature 文件
@@ -30,7 +30,7 @@ ios_cnt = 0
 android_cnt = 0
 web_cnt = 0
 
-for features in dataset:
+for features, label in dataset:
     # 将TensorFlow的特征转换为标准Python类型, tensorflow张量可以调用numpy()
     features_numpy = {key: value.numpy() for key, value in features.items()}
     # iter遍历dict只是返回key的迭代器，然后next取的是每一个key

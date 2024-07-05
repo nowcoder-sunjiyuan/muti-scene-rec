@@ -73,8 +73,9 @@ def train_test_dataset(batch_size: int):
     for key, value in all_features.items():
         feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
         feature_names.append(key)
-    dataset = read_tfrecord(train_file, feature_description, batch_size)
-    return dataset
+    dataset = read_tfrecord(train_file, feature_description, batch_size, labels=["label"])
+    test_dataset = read_tfrecord(test_file, feature_description, batch_size, labels=["label"])
+    return dataset, test_dataset
 
 
 # A utility method to create a tf.data dataset from a Pandas Dataframe

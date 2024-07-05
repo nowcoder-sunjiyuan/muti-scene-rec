@@ -2,12 +2,11 @@ import keras.src.ops
 
 import feature_representation.feature_representation as fr
 from keras import layers, InputSpec
-from keras import activations, initializers, regularizers, constraints
+from keras import activations, initializers, regularizers, constraints, optimizers
 import tensorflow as tf
 import utils.nn_utils as nn
-
-tensor_dict = fr.get_basic_feature_representation()
-feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
+import datetime
+from data_process import data_process
 
 
 class MMoE(layers.Layer):
@@ -177,9 +176,11 @@ class MMoE(layers.Layer):
 
         # g^{k}(x) = activation(W_{gk} * x + b), 激活函数softmax
         for index, gate_kernel in enumerate(self.gate_kernels):
-            gate_output = keras.ops.dot(x1=inputs, x2=gate_kernel)  # (none, feature_dim) * (feature_dim, 8) 每个门控输出8个值，控制8个专家的权重
+            gate_output = keras.ops.dot(x1=inputs,
+                                        x2=gate_kernel)  # (none, feature_dim) * (feature_dim, 8) 每个门控输出8个值，控制8个专家的权重
             if self.use_gate_bias:
-                gate_output = tf.nn.bias_add(value=gate_output, bias=self.gate_bias[index])  # (none, 8) + (8,) 这个会广播机制进行相加
+                gate_output = tf.nn.bias_add(value=gate_output,
+                                             bias=self.gate_bias[index])  # (none, 8) + (8,) 这个会广播机制进行相加
             gate_output = self.gate_activation(gate_output)  # (none, 8)
             gate_outputs.append(gate_output)
 
@@ -189,7 +190,8 @@ class MMoE(layers.Layer):
             expanded_gate_output = tf.expand_dims(gate_output, axis=1)  # (none, 1, 8)
             expanded_gate_output = tf.repeat(expanded_gate_output, self.units, axis=1)  # (none, 4, 8)
             weighted_expert_output = expert_outputs * expanded_gate_output  # (none, 4, 8) * (none, 4, 8) 元素级乘法，(none, 4, 8)
-            final_outputs.append(tf.reduce_sum(weighted_expert_output, axis=-1))  # (none, 4) 最后一个维度求和，这样就得到了8个专家网络最后的输出的和
+            final_outputs.append(
+                tf.reduce_sum(weighted_expert_output, axis=-1))  # (none, 4) 最后一个维度求和，这样就得到了8个专家网络最后的输出的和
         return final_outputs  # [(none, 4), (none, 4)...]
 
     def compute_output_shape(self, input_shape):
@@ -241,13 +243,36 @@ class MMoE(layers.Layer):
 
 
 mmoe_layer = MMoE(
-    units=4,
+    units=128,
     num_experts=8,
     num_tasks=1
 )
-tensor_dict = fr.get_basic_feature_representation_case()
-feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
-mmoe_output = mmoe_layer(feature_tensor)
+# tensor_dict = fr.get_basic_feature_representation_case()
+# feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
+# mmoe_output = mmoe_layer(feature_tensor)
+#
+# fully_output = nn.FullyConnectedTower([64, 32, 1], 'test_tower', 'relu', 'sigmoid')(feature_tensor)
+# print(fully_output)
 
-fully_output = nn.FullyConnectedTower([64, 32, 1], 'test_tower', 'relu', 'sigmoid')(feature_tensor)
-print(fully_output)
+# 获取特征的表示
+inputs, tensor_dict = fr.get_basic_feature_representation()
+feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
+# MMoE层
+mmoe_output = mmoe_layer(feature_tensor)
+task_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')(mmoe_output[0])
+# 模型
+model = keras.models.Model(inputs=inputs, outputs=[task_output])
+model.summary()
+# 编译
+model.compile(optimizer=keras.optimizers.Adam(0.0003),
+              loss="binary_crossentropy",
+              metrics=["AUC"])
+
+logdir = "/home/web/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
+
+# 获取dataset
+dataset, test_dataset = data_process.train_test_dataset(1024)
+# 训练数据
+es = keras.callbacks.EarlyStopping(monitor='val_CTR_auc', patience=1, mode="max", restore_best_weights=True)
+history = model.fit(dataset, epochs=3, validation_data=test_dataset, callbacks=[es, tensorboard_callback])

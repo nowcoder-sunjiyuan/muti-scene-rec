@@ -9,7 +9,7 @@ import utils.base_tool as base_tool
 from keras import layers
 
 # 可以去看 dataset 的 jupyter
-dataset = data_process.train_test_dataset(1024)
+dataset, test_dataset = data_process.train_test_dataset(1024)
 
 l2_reg = 0.0000025
 L2REG = keras.regularizers.L2(l2_reg)
@@ -38,13 +38,15 @@ SCHOOL_VOC_PATH = "../data_process/school_vocabulary.txt"
 SCHOOL_MAJOR_VOC_PATH = "../data_process/school_major_vocabulary.txt"
 
 take_dataset = dataset.take(1)
-[features] = take_dataset
+[(features, labels)] = take_dataset
 features = base_tool.MultiIODict(features)
 
 
 def get_basic_feature_representation():
     # 给所有特征建立 tensor
     inputs = data_process.build_input_tensor()
+    not_input_features = "label"
+    input_list = [v for k, v in inputs.items() if k not in not_input_features]
 
     # 最后tensor的结果dict，这是一个可以多进多出的 tensor
     tensor_dict = base_tool.MultiIODict({})
@@ -68,7 +70,7 @@ def get_basic_feature_representation():
     tensor_dict['school_type', 'author_school_type'] = nn.string_lookup_embedding(
         inputs=inputs['school_type', 'author_school_type'],
         voc_list=SCHOOL_TYPE_VOC,
-        name='school_major'
+        name='school_type'
     )
     # (none, 1) -> (none, 16) ??? 工作状态？？暂时不确定
     tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
@@ -108,11 +110,11 @@ def get_basic_feature_representation():
         output_dim=16,
         embeddings_regularizer=L2REG,
         embeddings_initializer='glorot_normal',
-        name='work_year'
+        name='work_year_embedding_layer'
     )
-    Reshape_layer = layers.Reshape((16,))
-    tensor_dict["work_year"] = Reshape_layer(work_year_embedding_layer(inputs["work_year"]))
-    tensor_dict["author_work_year"] = Reshape_layer(work_year_embedding_layer(inputs["author_work_year"]))
+    reshape_layer = layers.Reshape((16,))
+    tensor_dict["work_year"] = reshape_layer(work_year_embedding_layer(inputs["work_year"]))
+    tensor_dict["author_work_year"] = reshape_layer(work_year_embedding_layer(inputs["author_work_year"]))
 
     # 学历, 专科，本科，硕士，(none, 1) -> (none, 16)
     tensor_dict["edu_level", "author_edu_level"] = nn.string_lookup_embedding(
@@ -149,7 +151,7 @@ def get_basic_feature_representation():
     company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
     tensor_dict['company_keyword_emb'] = nn.ReduceMeanWithMask(3)(company_keyword_origin,
                                                                   inputs['company_keyword_max_len'])  # (none, 16)
-    return tensor_dict
+    return input_list, tensor_dict
 
 
 def get_basic_feature_representation_case():

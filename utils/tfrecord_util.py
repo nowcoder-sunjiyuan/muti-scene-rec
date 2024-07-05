@@ -21,7 +21,7 @@ def read_tfrecord(
                 raise AttributeError('权重列的名称不能为空！')
             weight = features.pop(weight_name)
             return features, tuple(_labels), weight
-        return features
+        return features, tuple(_labels)
 
     def _input():
         dataset = tf.data.TFRecordDataset(filenames)

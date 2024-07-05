@@ -197,3 +197,10 @@ class FullyConnectedTower(keras.layers.Layer):
             tower_input = cur
 
         return tower_input
+
+    def compute_output_shape(self, input_shape):
+        output_shape = list(input_shape)
+        final_unit = self.tower_units[-1]
+        output_shape[-1] = final_unit
+        output_shape = tuple(output_shape)
+        return output_shape
