@@ -124,6 +124,26 @@ def get_basic_feature_representation():
     )
 
     """
+    序列化数据的处理
+    hist_entity_id: 历史点击物品id, max_len是长度
+    expo_not_click_entity_id: 曝光未点击的物品id，expo_not_click_max_len是长度
+    comment_list_entity_id: 评论的物品id，comment_list_max_len是长度
+    """
+    entity_id_cols = ("entity_id", "hist_entity_id", "expo_not_click_entity_id", "comment_list_entity_id")
+    entity_id, hist_entity_id, expo_not_click_entity_id, comment_list_entity_id = nn.hash_lookup_embedding(
+        inputs=inputs[entity_id_cols],
+        name="entity_id",
+        num_bins=100000,
+    )
+    tensor_dict['entity_id_emb'] = entity_id
+    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id,
+                                                                  inputs['company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id,
+                                                                            inputs['expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id,
+                                                                          inputs['comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
+
+    """
     5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
     """
     st_company_col = features['short_term_companies']
@@ -155,7 +175,6 @@ def get_basic_feature_representation():
 
 
 def get_basic_feature_representation_case():
-
     # 最后tensor的结果dict，这是一个可以多进多出的 tensor
     tensor_dict = base_tool.MultiIODict({})
 
@@ -207,4 +226,74 @@ def get_basic_feature_representation_case():
         name="career_job1_3",
         num_bins=1000,
     )
+
+    # 工作时间，毕业时间距离今年的距离，可能为负数， workYea已经被处理成区间表示
+    work_year_embedding_layer = layers.Embedding(
+        input_dim=len(WORK_YEAR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='work_year_embedding_layer'
+    )
+    reshape_layer = layers.Reshape((16,))
+    tensor_dict["work_year"] = reshape_layer(work_year_embedding_layer(features["work_year"]))
+    tensor_dict["author_work_year"] = reshape_layer(work_year_embedding_layer(features["author_work_year"]))
+
+    # 学历, 专科，本科，硕士，(none, 1) -> (none, 16)
+    tensor_dict["edu_level", "author_edu_level"] = nn.string_lookup_embedding(
+        inputs=features["edu_level", "author_edu_level"],
+        name="edu_level",
+        voc_list=EDU_LEVEL_VOC
+    )
+
+    """
+    序列化数据的处理
+    hist_entity_id: 历史点击物品id, max_len是长度
+    expo_not_click_entity_id: 曝光未点击的物品id，expo_not_click_max_len是长度
+    comment_list_entity_id: 评论的物品id，comment_list_max_len是长度
+    """
+    entity_id_cols = ("entity_id", "hist_entity_id", "expo_not_click_entity_id", "comment_list_entity_id")
+    entity_id, hist_entity_id, expo_not_click_entity_id, comment_list_entity_id = nn.hash_lookup_embedding(
+        inputs=features[entity_id_cols],
+        name="entity_id",
+        num_bins=100000,
+    )
+    tensor_dict['entity_id_emb'] = entity_id
+    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id,
+                                                                  features['company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id,
+                                                                            features['expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id,
+                                                                          features['comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
+
+
+    """
+    5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
+    """
+    st_company_col = features['short_term_companies']
+    st_company_emb_origin = nn.hash_lookup_embedding(inputs=features['short_term_companies'], num_bins=10000,
+                                                     embedding_dimension=16,
+                                                     embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
+                                                     name='short_term_companies')  # (none, 5, 16)
+    # softmax作用在最后一个维度, 从(none, 5) -> (none, 5, 1)
+    st_companies_weights = layers.Softmax(axis=-1)(features['short_term_companies_weights'])  # (none, 5)
+    st_companies_weights = nn.ExpandDimsLayer(-1)(st_companies_weights)  # (None, 5, 1)
+    # 将这5个向量加权求和  reduce((None,5,16) * (none,5,1))
+    tensor_dict['st_companies_emb'] = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)  # (none, 16)
+    # st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
+    # st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
+
+    """
+    company_keyword (hash) (none, 3) 这个是公司的关键字, 对公司向量求平均
+    """
+    company_keyword_col = features['company_keyword']
+    company_keyword_origin = nn.hash_lookup_embedding(inputs=features['company_keyword'], num_bins=10000,
+                                                      embedding_dimension=16,
+                                                      embedding_regularizer=L2REG,
+                                                      embedding_initializer='glorot_normal',
+                                                      name='company_keyword')  # (none, 3, 16)
+    company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
+    tensor_dict['company_keyword_emb'] = nn.ReduceMeanWithMask(3)(company_keyword_origin,
+                                                                  features['company_keyword_max_len'])  # (none, 16)
+
     return tensor_dict

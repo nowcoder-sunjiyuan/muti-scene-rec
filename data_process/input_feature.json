@@ -13,6 +13,14 @@
   "career_job3_3": ["string", 1],
   "work_year": ["int64", 1],
   "edu_level": ["string", 1],
+
+  "hist_entity_id": ["string", 20],
+  "max_len": ["int64", 1],
+  "comment_list_entity_id": ["string", 10],
+  "comment_list_max_len": ["int64", 1],
+  "expo_not_click_entity_id": ["string", 20],
+  "expo_not_click_max_len": ["int64", 1],
+
   "short_term_companies": ["string", 5],
   "short_term_companies_weights": ["float32", 5],
   "manual_career_job_1": ["string", 1],
@@ -29,5 +37,8 @@
   "author_edu_level": ["string", 1],
   "author_edu_work_status": ["int64", 1],
   "author_work_year": ["int64", 1],
+
+  "entity_id": ["string", 1],
+
   "label": ["int64", 1]
 }

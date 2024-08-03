@@ -10,7 +10,7 @@ TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
 
 # feature 文件
 current_dir = os.path.dirname(__file__)
-json_file = os.path.join(current_dir, 'feature.json')
+json_file = os.path.join(current_dir, 'tfrecord_feature.json')
 all_features = json.load(open(json_file))
 
 # 构建  feature_name 列表

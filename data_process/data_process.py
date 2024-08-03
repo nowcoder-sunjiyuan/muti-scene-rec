@@ -94,7 +94,7 @@ def train_test_dataset(batch_size: int):
 
     # feature 文件
     current_dir = os.path.dirname(__file__)
-    json_file = os.path.join(current_dir, 'feature.json')
+    json_file = os.path.join(current_dir, 'tfrecord_feature.json')
     all_features = json.load(open(json_file))
 
     # 构建 feature_description, dataset
@@ -128,7 +128,7 @@ def get_dataset_dataframe(batch_size):
 
 def build_input_tensor():
     current_dir = os.path.dirname(__file__)
-    json_file = os.path.join(current_dir, 'feature.json')
+    json_file = os.path.join(current_dir, 'input_feature.json')
     all_features = json.load(open(json_file))
 
     inputs = base_tool.MultiIODict({})
