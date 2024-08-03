@@ -1,13 +1,20 @@
+import tensorflow as tf
 import keras.src.ops
 
 import feature_representation.feature_representation as fr
 from keras import layers, InputSpec
 from keras import activations, initializers, regularizers, constraints, optimizers
-import tensorflow as tf
+
 import utils.nn_utils as nn
 import datetime
 from data_process import data_process
 
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
+if tf.test.gpu_device_name():
+    print('Default GPU Device: {}'.format(tf.test.gpu_device_name()))
+else:
+    print("Please install GPU version of TF")
 
 class MMoE(layers.Layer):
     """
@@ -275,4 +282,10 @@ tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
 dataset, test_dataset = data_process.train_test_dataset(1024)
 # 训练数据
 es = keras.callbacks.EarlyStopping(monitor='val_CTR_auc', patience=1, mode="max", restore_best_weights=True)
+time1 = datetime.datetime.now()
+print(time1)
 history = model.fit(dataset, epochs=3, validation_data=test_dataset, callbacks=[es, tensorboard_callback])
+time2 = datetime.datetime.now()
+print(time2)
+time_interval = time2 - time1
+print("Training took:", time_interval)
