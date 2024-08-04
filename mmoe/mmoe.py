@@ -9,13 +9,6 @@ import utils.nn_utils as nn
 import datetime
 from data_process import data_process
 
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-
-if tf.test.gpu_device_name():
-    print('Default GPU Device: {}'.format(tf.test.gpu_device_name()))
-else:
-    print("Please install GPU version of TF")
-
 class MMoE(layers.Layer):
     """
     Multi-gate Mixture-of-Experts model.
@@ -248,45 +241,52 @@ class MMoE(layers.Layer):
 
         return dict(list(base_config.items()) + list(config.items()))
 
+if __name__ == '__main__':
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
-mmoe_layer = MMoE(
-    units=128,
-    num_experts=8,
-    num_tasks=2
-)
-# tensor_dict = fr.get_basic_feature_representation_case()
-# feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
-# mmoe_output = mmoe_layer(feature_tensor)
-#
-# fully_output = nn.FullyConnectedTower([64, 32, 1], 'test_tower', 'relu', 'sigmoid')(feature_tensor)
-# print(fully_output)
+    if tf.test.gpu_device_name():
+        print('Default GPU Device: {}'.format(tf.test.gpu_device_name()))
+    else:
+        print("Please install GPU version of TF")
 
-# 获取特征的表示
-inputs, tensor_dict = fr.get_basic_feature_representation()
-feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
-# MMoE层
-mmoe_output = mmoe_layer(feature_tensor)
-ctr_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')(mmoe_output[0])
-cvr_output = nn.FullyConnectedTower([64, 32, 1], 'cvr', 'relu', 'sigmoid')(mmoe_output[1])
-# 模型
-model = keras.models.Model(inputs=inputs, outputs=[ctr_output, cvr_output])
-model.summary()
-# 编译
-model.compile(optimizer=keras.optimizers.Adam(0.0003),
-              loss=["binary_crossentropy", "binary_crossentropy"],
-              metrics=["AUC", "AUC"])
+    mmoe_layer = MMoE(
+        units=128,
+        num_experts=8,
+        num_tasks=2
+    )
+    # tensor_dict = fr.get_basic_feature_representation_case()
+    # feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
+    # mmoe_output = mmoe_layer(feature_tensor)
+    #
+    # fully_output = nn.FullyConnectedTower([64, 32, 1], 'test_tower', 'relu', 'sigmoid')(feature_tensor)
+    # print(fully_output)
 
-logdir = "/home/web/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
+    # 获取特征的表示
+    inputs, tensor_dict = fr.get_basic_feature_representation()
+    feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
+    # MMoE层
+    mmoe_output = mmoe_layer(feature_tensor)
+    ctr_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')(mmoe_output[0])
+    cvr_output = nn.FullyConnectedTower([64, 32, 1], 'cvr', 'relu', 'sigmoid')(mmoe_output[1])
+    # 模型
+    model = keras.models.Model(inputs=inputs, outputs=[ctr_output, cvr_output])
+    model.summary()
+    # 编译
+    model.compile(optimizer=keras.optimizers.Adam(0.0003),
+                  loss=["binary_crossentropy", "binary_crossentropy"],
+                  metrics=["AUC", "AUC"])
 
-# 获取dataset
-dataset, test_dataset = data_process.train_test_dataset(1024)
-# 训练数据
-es = keras.callbacks.EarlyStopping(monitor='val_ctr_auc', patience=1, mode="max", restore_best_weights=True)
-time1 = datetime.datetime.now()
-print(time1)
-history = model.fit(dataset, epochs=3, validation_data=test_dataset, callbacks=[es, tensorboard_callback])
-time2 = datetime.datetime.now()
-print(time2)
-time_interval = time2 - time1
-print("Training took:", time_interval)
+    logdir = "/home/web/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
+
+    # 获取dataset
+    dataset, test_dataset = data_process.train_test_dataset(1024)
+    # 训练数据
+    es = keras.callbacks.EarlyStopping(monitor='val_ctr_auc', patience=1, mode="max", restore_best_weights=True)
+    time1 = datetime.datetime.now()
+    print(time1)
+    history = model.fit(dataset, epochs=3, validation_data=test_dataset, callbacks=[es, tensorboard_callback])
+    time2 = datetime.datetime.now()
+    print(time2)
+    time_interval = time2 - time1
+    print("Training took:", time_interval)
