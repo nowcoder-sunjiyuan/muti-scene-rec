@@ -103,8 +103,8 @@ def train_test_dataset(batch_size: int):
     for key, value in all_features.items():
         feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
         feature_names.append(key)
-    dataset = read_tfrecord(train_file, feature_description, batch_size, labels=["label"])
-    test_dataset = read_tfrecord(test_file, feature_description, batch_size, labels=["label"])
+    dataset = read_tfrecord(train_file, feature_description, batch_size, labels=["label", "cvr_label"])
+    test_dataset = read_tfrecord(test_file, feature_description, batch_size, labels=["label", "cvr_label"])
     return dataset, test_dataset
 
 

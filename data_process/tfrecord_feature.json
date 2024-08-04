@@ -56,5 +56,7 @@
   "week_day": ["int64", 1],
   "platform": ["string", 1],
   "pit_var": ["int64", 1],
-  "label": ["int64", 1]
+
+  "label": ["int64", 1],
+  "cvr_label": ["int64", 1]
 }

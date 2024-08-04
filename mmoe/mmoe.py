@@ -252,7 +252,7 @@ class MMoE(layers.Layer):
 mmoe_layer = MMoE(
     units=128,
     num_experts=8,
-    num_tasks=1
+    num_tasks=2
 )
 # tensor_dict = fr.get_basic_feature_representation_case()
 # feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
@@ -266,14 +266,15 @@ inputs, tensor_dict = fr.get_basic_feature_representation()
 feature_tensor = layers.concatenate([tensor_dict[k] for k in tensor_dict])
 # MMoE层
 mmoe_output = mmoe_layer(feature_tensor)
-task_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')(mmoe_output[0])
+ctr_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')(mmoe_output[0])
+cvr_output = nn.FullyConnectedTower([64, 32, 1], 'cvr', 'relu', 'sigmoid')(mmoe_output[1])
 # 模型
-model = keras.models.Model(inputs=inputs, outputs=[task_output])
+model = keras.models.Model(inputs=inputs, outputs=[ctr_output, cvr_output])
 model.summary()
 # 编译
 model.compile(optimizer=keras.optimizers.Adam(0.0003),
-              loss="binary_crossentropy",
-              metrics=["AUC"])
+              loss=["binary_crossentropy", "binary_crossentropy"],
+              metrics=["AUC", "AUC"])
 
 logdir = "/home/web/logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
@@ -281,7 +282,7 @@ tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
 # 获取dataset
 dataset, test_dataset = data_process.train_test_dataset(1024)
 # 训练数据
-es = keras.callbacks.EarlyStopping(monitor='val_CTR_auc', patience=1, mode="max", restore_best_weights=True)
+es = keras.callbacks.EarlyStopping(monitor='val_ctr_auc', patience=1, mode="max", restore_best_weights=True)
 time1 = datetime.datetime.now()
 print(time1)
 history = model.fit(dataset, epochs=3, validation_data=test_dataset, callbacks=[es, tensorboard_callback])

@@ -54,6 +54,5 @@
   "entity_id": ["string", 1],
   "week_day": ["int64", 1],
   "platform": ["string", 1],
-  "pit_var": ["int64", 1],
-  "label": ["int64", 1]
+  "pit_var": ["int64", 1]
 }
