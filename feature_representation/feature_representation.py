@@ -300,8 +300,8 @@ def get_basic_feature_representation():
     expo_not_click_entity_id: 曝光未点击的物品id，expo_not_click_max_len是长度
     comment_list_entity_id: 评论的物品id，comment_list_max_len是长度
     """
-    entity_id_cols = ("entity_id", "hist_entity_id", "expo_not_click_entity_id", "comment_list_entity_id")
-    entity_id, hist_entity_id, expo_not_click_entity_id, comment_list_entity_id = nn.hash_lookup_embedding(
+    entity_id_cols = ("entity_id", "hist_entity_id", "comment_list_entity_id")
+    entity_id, hist_entity_id, comment_list_entity_id = nn.hash_lookup_embedding(
         inputs=inputs[entity_id_cols],
         name="entity_id",
         num_bins=100000,
@@ -309,8 +309,8 @@ def get_basic_feature_representation():
     tensor_dict['entity_id_emb'] = entity_id
     tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id, inputs[
         'company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id, inputs[
-        'expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    # tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id, inputs[
+    #     'expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
     tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id, inputs[
         'comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
 

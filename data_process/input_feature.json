@@ -18,8 +18,7 @@
   "max_len": ["int64", 1],
   "comment_list_entity_id": ["string", 10],
   "comment_list_max_len": ["int64", 1],
-  "expo_not_click_entity_id": ["string", 20],
-  "expo_not_click_max_len": ["int64", 1],
+
   "short_term_companies": ["string", 5],
   "short_term_companies_weights": ["float32", 5],
   "uid": ["string", 1],
