@@ -32,6 +32,16 @@ SCHOOL_TYPE_VOC = ["<nan>", "211", "985", "一本", "二本", "初高中", "双�
 GENDER_VOC = ["<nan>", "其他", "男", "女"]
 EDU_WORK_STATUS_VOC = [0, 1, 2]
 WORK_YEAR_BOUND = [-3, -2, -1, 0, 1, 3, 5, 10]
+
+REPLY_NUMBER_BOUND = [1, 2, 3, 4, 5, 7, 9, 15, 21, 30, 50, 100, 500]
+LIKE_NUMBER_BOUND = [1, 2, 3, 4, 5, 7, 9, 15, 21, 30, 50, 100, 500]
+VIEW_NUMBER_BOUND = [1, 5, 10, 15, 30, 50, 100, 150, 200, 300, 500, 750, 1000, 2000, 5000, 10000]
+
+CTR_BOUND = [0.03, 0.05, 0.08, 0.1, 0.15, 0.20, 0.25]
+DAY_DELTA_BOUND = [1, 3, 5, 7, 14, 28, 45]
+
+PIT_VAR_BOUND = [20, 40, 60, 80, 100, 150, 200]
+
 EDU_LEVEL_VOC = ["<nan>", "其他", "专科", "博士及以上", "学士", "硕士", "高中及以下"]
 
 SCHOOL_VOC_PATH = "../data_process/school_vocabulary.txt"
@@ -54,6 +64,10 @@ def get_basic_feature_representation():
     """
     基本的特征
     """
+    tensor_dict['uid', 'author_uid'] = nn.hash_lookup_embedding(
+        inputs=inputs['uid', 'author_uid'], name="uid", embedding_dimension=32, num_bins=100000
+    )
+
     # (none, 1)  -> (none, 16) 性别
     tensor_dict['gender', 'author_gender'] = nn.string_lookup_embedding(inputs=inputs['gender', 'author_gender'],
                                                                         voc_list=GENDER_VOC, name='gender')
@@ -72,6 +86,14 @@ def get_basic_feature_representation():
         voc_list=SCHOOL_TYPE_VOC,
         name='school_type'
     )
+
+    # (none, 1) -> (none) 工作状态，就是是否找工作
+    tensor_dict['work_status_detail'] = nn.hash_lookup_embedding(
+        inputs=inputs['work_status_detail'],
+        name="work_status_detail",
+        num_bins=5
+    )
+
     # (none, 1) -> (none, 16) ??? 工作状态？？暂时不确定
     tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
         inputs=inputs['edu_work_status', 'author_edu_work_status'],
@@ -124,6 +146,155 @@ def get_basic_feature_representation():
     )
 
     """
+    回复数量，喜欢数量，曝光数量
+    """
+    reply_number_embedding_layer = layers.Embedding(
+        input_dim=len(REPLY_NUMBER_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='reply_number_embedding_layer'
+    )
+    tensor_dict['reply_number'] = reshape_layer(reply_number_embedding_layer(inputs['reply_number']))
+
+    like_number_embedding_layer = layers.Embedding(
+        input_dim=len(LIKE_NUMBER_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='like_number_embedding_layer'
+    )
+    tensor_dict['like_number'] = reshape_layer(like_number_embedding_layer(inputs['like_number']))
+
+    view_number_embedding_layer = layers.Embedding(
+        input_dim=len(VIEW_NUMBER_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='view_number_embedding_layer'
+    )
+    tensor_dict['view_number'] = reshape_layer(view_number_embedding_layer(inputs['view_number']))
+
+    """
+    post_module, content_module
+    """
+    post_module_embedding_layer = layers.Embedding(
+        input_dim=13,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='post_module_embedding_layer'
+    )
+    tensor_dict['post_module'] = reshape_layer(post_module_embedding_layer(inputs['post_module']))
+
+    content_module_embedding_layer = layers.Embedding(
+        input_dim=4,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='content_module_embedding_layer'
+    )
+    tensor_dict['content_module'] = reshape_layer(content_module_embedding_layer(inputs['content_mode']))
+
+    """
+    TAXONOMY1, TAXONOMY2
+    """
+    tensor_dict['taxonomy1'] = nn.string_lookup_embedding(inputs=inputs['taxonomy1'],
+                                                          voc_list=TAXONOMY1_VOC, name='taxonomy1')
+    tensor_dict['taxonomy2'] = nn.string_lookup_embedding(inputs=inputs['taxonomy2'],
+                                                          voc_list=TAXONOMY2_VOC, name='taxonomy2')
+
+    """
+    form
+    """
+    form_embedding_layer = layers.Embedding(
+        input_dim=6,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='form_embedding_layer'
+    )
+    tensor_dict['form'] = reshape_layer(form_embedding_layer(inputs['form']))
+
+    """
+    ctr
+    """
+    ctr_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='ctr_embedding_layer'
+    )
+    tensor_dict['ctr'] = reshape_layer(ctr_embedding_layer(inputs['ctr']))
+    ctr_3_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='ctr_3_embedding_layer'
+    )
+    tensor_dict['ctr_3'] = reshape_layer(ctr_3_embedding_layer(inputs['ctr_3']))
+    ctr_7_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='ctr_7_embedding_layer'
+    )
+    tensor_dict['ctr_7'] = reshape_layer(ctr_7_embedding_layer(inputs['ctr_7']))
+    career_job_ctr_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='career_job_ctr_embedding_layer'
+    )
+    tensor_dict['career_job_ctr'] = reshape_layer(career_job_ctr_embedding_layer(inputs['career_job_ctr']))
+
+    """
+    day_delta
+    """
+    # day_delta_embedding_layer = layers.Embedding(
+    #     input_dim=len(DAY_DELTA_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='day_delta_embedding_layer'
+    # )
+    # tensor_dict['day_delta'] = reshape_layer(day_delta_embedding_layer(inputs['day_delta']))
+
+    """
+    week_day
+    """
+    week_day_embedding_layer = layers.Embedding(
+        input_dim=7,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='week_day_embedding_layer'
+    )
+    tensor_dict['week_day'] = reshape_layer(week_day_embedding_layer(inputs['week_day']))
+
+    """
+    平台，platform
+    """
+    tensor_dict['platform'] = nn.string_lookup_embedding(inputs=inputs['platform'],
+                                                         voc_list=["<nan>", "iOS, Android", "web"], name='platform')
+
+    """
+    pit_var
+    """
+    # pit_var_embedding_layer = layers.Embedding(
+    #     input_dim=len(PIT_VAR_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='pit_var_embedding_layer'
+    # )
+    # tensor_dict['pit_var'] = reshape_layer(pit_var_embedding_layer(inputs['pit_var']))
+
+    """
     序列化数据的处理
     hist_entity_id: 历史点击物品id, max_len是长度
     expo_not_click_entity_id: 曝光未点击的物品id，expo_not_click_max_len是长度
@@ -136,12 +307,12 @@ def get_basic_feature_representation():
         num_bins=100000,
     )
     tensor_dict['entity_id_emb'] = entity_id
-    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id,
-                                                                  inputs['company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id,
-                                                                            inputs['expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id,
-                                                                          inputs['comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
+    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id, inputs[
+        'company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id, inputs[
+        'expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id, inputs[
+        'comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
 
     """
     5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
@@ -178,6 +349,10 @@ def get_basic_feature_representation_case():
     # 最后tensor的结果dict，这是一个可以多进多出的 tensor
     tensor_dict = base_tool.MultiIODict({})
 
+    tensor_dict['uid', 'author_uid'] = nn.hash_lookup_embedding(
+        inputs=features['uid', 'author_uid'], name="uid", embedding_dimension=32, num_bins=100000
+    )
+
     tensor_dict['gender', 'author_gender'] = nn.string_lookup_embedding(inputs=features['gender', 'author_gender'],
                                                                         voc_list=GENDER_VOC, name='gender')
     # (none, 1)  -> (none, 16) 学校
@@ -195,7 +370,15 @@ def get_basic_feature_representation_case():
         voc_list=SCHOOL_TYPE_VOC,
         name='school_major'
     )
-    # (none, 1) -> (none, 16) ??? 工作状态？？暂时不确定
+
+    # (none, 1) -> (none) ???
+    tensor_dict['work_status_detail'] = nn.hash_lookup_embedding(
+        inputs=features['work_status_detail'],
+        name="work_status_detail",
+        num_bins=5
+    )
+
+    # (none, 1) -> (none, 16) 是否找工作
     tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
         inputs=features['edu_work_status', 'author_edu_work_status'],
         voc_list=EDU_WORK_STATUS_VOC,
@@ -247,6 +430,156 @@ def get_basic_feature_representation_case():
     )
 
     """
+    回复数量，喜欢数量，曝光数量
+    """
+    reply_number_embedding_layer = layers.Embedding(
+        input_dim=len(REPLY_NUMBER_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='reply_number_embedding_layer'
+    )
+    tensor_dict['reply_number'] = reshape_layer(reply_number_embedding_layer(features['reply_number']))
+
+    like_number_embedding_layer = layers.Embedding(
+        input_dim=len(LIKE_NUMBER_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='like_number_embedding_layer'
+    )
+    tensor_dict['like_number'] = reshape_layer(like_number_embedding_layer(features['like_number']))
+
+    view_number_embedding_layer = layers.Embedding(
+        input_dim=len(VIEW_NUMBER_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='view_number_embedding_layer'
+    )
+    tensor_dict['view_number'] = reshape_layer(view_number_embedding_layer(features['view_number']))
+
+    """
+    post_module, content_mode
+    """
+    post_module_embedding_layer = layers.Embedding(
+        input_dim=13,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='post_module_embedding_layer'
+    )
+    tensor_dict['post_module'] = reshape_layer(post_module_embedding_layer(features['post_module']))
+
+    content_module_embedding_layer = layers.Embedding(
+        input_dim=4,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='content_module_embedding_layer'
+    )
+    tensor_dict['content_module'] = reshape_layer(content_module_embedding_layer(features['content_mode']))
+
+    """
+    TAXONOMY1, TAXONOMY2：运营的打标，当前帖子内容的分类，（分类树）
+    """
+    tensor_dict['taxonomy1'] = nn.string_lookup_embedding(inputs=features['taxonomy1'],
+                                                          voc_list=TAXONOMY1_VOC, name='taxonomy1')
+    tensor_dict['taxonomy2'] = nn.string_lookup_embedding(inputs=features['taxonomy2'],
+                                                          voc_list=TAXONOMY2_VOC, name='taxonomy2')
+
+    """
+    form: 形式，当前帖子的形式，图片，文本，等
+    """
+    form_embedding_layer = layers.Embedding(
+        input_dim=6,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='form_embedding_layer'
+    )
+    tensor_dict['form'] = reshape_layer(form_embedding_layer(features['form']))
+
+    """
+    ctr：点击率
+    """
+    ctr_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='ctr_embedding_layer'
+    )
+    tensor_dict['ctr'] = reshape_layer(ctr_embedding_layer(features['ctr']))
+    ctr_3_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='ctr_3_embedding_layer'
+    )
+    tensor_dict['ctr_3'] = reshape_layer(ctr_3_embedding_layer(features['ctr_3']))
+    ctr_7_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='ctr_7_embedding_layer'
+    )
+    tensor_dict['ctr_7'] = reshape_layer(ctr_7_embedding_layer(features['ctr_7']))
+    career_job_ctr_embedding_layer = layers.Embedding(
+        input_dim=len(CTR_BOUND) + 1,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='career_job_ctr_embedding_layer'
+    )
+    tensor_dict['career_job_ctr'] = reshape_layer(career_job_ctr_embedding_layer(features['career_job_ctr']))
+
+    """
+    day_delta：当前事件距离发帖时的时间天数间隔
+    """
+    # day_delta_embedding_layer = layers.Embedding(
+    #     input_dim=len(DAY_DELTA_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='day_delta_embedding_layer'
+    # )
+    # tensor_dict['day_delta'] = reshape_layer(day_delta_embedding_layer(features['day_delta']))
+
+    """
+    week_day：当前的星期几
+    """
+    week_day_embedding_layer = layers.Embedding(
+        input_dim=7,
+        output_dim=16,
+        embeddings_regularizer=L2REG,
+        embeddings_initializer='glorot_normal',
+        name='week_day_embedding_layer'
+    )
+    tensor_dict['week_day'] = reshape_layer(week_day_embedding_layer(features['week_day']))
+
+    """
+    平台，platform
+    """
+    tensor_dict['platform'] = nn.string_lookup_embedding(inputs=features['platform'],
+                                                         voc_list=["<nan>", "iOS, Android", "web"], name='platform')
+
+    """
+    pit_var：坑位，也就是处于什么位置
+    """
+    # pit_var_embedding_layer = layers.Embedding(
+    #     input_dim=len(PIT_VAR_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='pit_var_embedding_layer'
+    # )
+    # tensor_dict['pit_var'] = reshape_layer(pit_var_embedding_layer(features['pit_var']))
+
+
+    """
     序列化数据的处理
     hist_entity_id: 历史点击物品id, max_len是长度
     expo_not_click_entity_id: 曝光未点击的物品id，expo_not_click_max_len是长度
@@ -259,13 +592,12 @@ def get_basic_feature_representation_case():
         num_bins=100000,
     )
     tensor_dict['entity_id_emb'] = entity_id
-    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id,
-                                                                  features['company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id,
-                                                                            features['expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id,
-                                                                          features['comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
-
+    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id, features[
+        'company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id, features[
+        'expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id, features[
+        'comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
 
     """
     5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
