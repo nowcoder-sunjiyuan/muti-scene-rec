@@ -1,4 +1,4 @@
-from data_process import data_process
+from data_process import dataset_process
 import numpy as np
 import tensorflow as tf
 import keras
@@ -204,3 +204,98 @@ class FullyConnectedTower(keras.layers.Layer):
         output_shape[-1] = final_unit
         output_shape = tuple(output_shape)
         return output_shape
+
+
+class StringLookupEmbeddingLayer(tf.keras.layers.Layer):
+    def __init__(self, voc_list, embedding_dimension=16, embedding_regularizer=L2REG,
+                 embedding_initializer='glorot_normal', name='', **kwargs):
+        super(StringLookupEmbeddingLayer, self).__init__(name=name, **kwargs)
+        self.string_lookup_layer = layers.StringLookup(vocabulary=voc_list,
+                                                       name=f"{name}_lookup_layer")
+        self.embedding_layer = layers.Embedding(input_dim=len(self.string_lookup_layer.get_vocabulary()) + 1,
+                                                output_dim=embedding_dimension,
+                                                embeddings_regularizer=embedding_regularizer,
+                                                embeddings_initializer=embedding_initializer,
+                                                name=f"{name}_embedding_layer")
+        self.reshape_layer = layers.Reshape((embedding_dimension,))
+
+    def call(self, inputs, **kwargs):
+        # 先通过StringLookup层，将字符串转换为整数索引
+        lookup_indices = self.string_lookup_layer(inputs)
+        # 然后，通过Embedding层，将整数索引转换为嵌入向量
+        embedding_res = self.embedding_layer(lookup_indices)
+        embedding_res = self.reshape_layer(embedding_res)
+        return embedding_res
+
+    def get_config(self):
+        # 重写get_config以确保我们的层可以正确序列化
+        config = super(StringLookupEmbeddingLayer, self).get_config()
+        config.update({
+            'voc_list': self.string_lookup_layer.get_vocabulary(),
+            'embedding_dimension': self.embedding_layer.output_dim,
+            'embedding_regularizer': self.embedding_layer.embeddings_regularizer,
+            'embedding_initializer': self.embedding_layer.embeddings_initializer,
+            'name': self.name
+        })
+        return config
+
+
+class HashLookupEmbeddingLayer(tf.keras.layers.Layer):
+    def __init__(self, num_bins, embedding_dimension=16, embedding_regularizer=L2REG,
+                 embedding_initializer='glorot_normal', name='', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.hash_layer = layers.Hashing(num_bins=num_bins, name=f"{name}_hash_layer")
+        self.embedding_layer = layers.Embedding(input_dim=num_bins,
+                                                output_dim=embedding_dimension,
+                                                embeddings_initializer=embedding_initializer,
+                                                embeddings_regularizer=embedding_regularizer,
+                                                name=f"{name}_embedding_layer")
+        self.reshape_layer = layers.Reshape((embedding_dimension,))
+
+    def call(self, inputs):
+        hashed_inputs = self.hash_layer(inputs)
+        embedding_res = self.embedding_layer(hashed_inputs)
+        embedding_res = self.reshape_layer(embedding_res)
+        return embedding_res
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'num_bins': self.hash_layer.num_bins,
+            'embedding_dimension': self.embedding_layer.output_dim,
+            'embedding_regularizer': self.embedding_layer.embeddings_regularizer,
+            'embedding_initializer': self.embedding_layer.embeddings_initializer,
+            'name': self.name
+        })
+        return config
+
+
+class IntegerLookupEmbeddingLayer(tf.keras.layers.Layer):
+    def __init__(self, voc_list, embedding_dimension=16, embedding_regularizer=L2REG,
+                 embedding_initializer='glorot_normal', name='', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.integer_lookup_layer = layers.IntegerLookup(vocabulary=voc_list,
+                                                         name=f"{name}_lookup_layer")
+        self.embedding_layer = layers.Embedding(input_dim=len(voc_list) + 1,
+                                                output_dim=embedding_dimension,
+                                                embeddings_regularizer=embedding_regularizer,
+                                                embeddings_initializer=embedding_initializer,
+                                                name=f"{name}_embedding_layer")
+        self.reshape_layer = layers.Reshape((embedding_dimension,))
+
+    def call(self, inputs):
+        lookup_indices = self.integer_lookup_layer(inputs)
+        embedding_res = self.embedding_layer(lookup_indices)
+        embedding_res = self.reshape_layer(embedding_res)
+        return embedding_res
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({
+            'voc_list': self.integer_lookup_layer.get_vocabulary(),
+            'embedding_dimension': self.embedding_layer.output_dim,
+            'embedding_regularizer': self.embedding_layer.embeddings_regularizer,
+            'embedding_initializer': self.embedding_layer.embeddings_initializer,
+            'name': self.name
+        })
+        return config

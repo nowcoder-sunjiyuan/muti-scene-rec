@@ -1,0 +1,19 @@
+{
+  "school": ["string", 1],
+  "school_major": ["string", 1],
+  "work_status_detail": ["int64", 1],
+  "career_job1_2": ["string", 1],
+  "work_year": ["int64", 1],
+  "edu_level": ["string", 1],
+  "uid": ["string", 1],
+  "manual_career_job_1": ["string", 1],
+
+  "author_uid": ["string", 1],
+  "author_career_job1_2": ["string", 1],
+  "author_school": ["string", 1],
+  "author_school_major": ["string", 1],
+  "author_edu_level": ["string", 1],
+  "author_work_year": ["int64", 1],
+  "entity_id": ["string", 1],
+  "platform": ["string", 1]
+}

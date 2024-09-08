@@ -1,20 +1,27 @@
 import datetime
 import os
 import sys
+import time
+
 import tensorflow as tf
 import json
 from utils.tfrecord_util import read_tfrecord
 import utils.base_tool as base_tool
 import pandas as pd
 import keras
+import data_process.data_augmentation as da
+import copy
+import data_process.feature_process as fp
+import random
+from models.FeatureEmbModel import FeatureEmbModel
 
 TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
 
 
 def win_train_test_file():
-    start_time = datetime.datetime(2024, 5, 11, 0, 0, 0)
-    train_days_num = 10
-    test_days_num = 1
+    start_time = datetime.datetime(2024, 7, 1, 0, 0, 0)
+    train_days_num = 14
+    test_days_num = 2
     data_path = '/home/web/sunjiyuan/data/essm/v1'
 
     train_files, test_files = [], []
@@ -67,7 +74,6 @@ def linux_train_test_file():
 
     print(f"添加的文件数量：训练集 {len(train_files)} 测试集 {len(test_files)}")
     return train_files, test_files
-
 
 
 def mac_train_test_file():
@@ -136,3 +142,95 @@ def build_input_tensor():
         _type, _shape = TYPE_DICT[all_features[key][0]], all_features[key][1]
         inputs[key] = keras.Input(shape=(_shape,), name=key, dtype=_type)
     return inputs
+
+
+class DatasetProcess:
+
+    def __init__(self):
+        # 加载特征dict
+        current_dir = os.path.dirname(__file__)
+        json_file = os.path.join(current_dir, 'input_feature_cf.json')
+        self.cf_features = json.load(open(json_file))
+
+        # 特征表示
+        self.feature_description = {}
+        self.features_name = []
+        for key, value in self.cf_features.items():
+            self.feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
+            self.features_name.append(key)
+        self.label_description = {"label": tf.io.FixedLenFeature(shape=(1,), dtype="int64")}
+        self.feature_parse_model = FeatureEmbModel()
+
+        # 数据增强方案
+        self.augmentations = {
+            "mask": da.Mask(features_name=self.features_name),
+            "random": da.Random(features_name=self.features_name),
+        }
+        self.base_transform = self.augmentations["random"]
+
+    def example_generator(self, tfrecord_filenames, batch_size):
+        dataset = tf.data.TFRecordDataset(tfrecord_filenames)
+        dataset = dataset.batch(batch_size)
+
+        def filter_batch_size(raw_record):
+            # 检查当前批次的大小是否等于batch_size
+            return tf.equal(tf.shape(raw_record)[0], batch_size)
+
+        # 只保留大小等于batch_size的批次
+        dataset = dataset.filter(filter_batch_size)
+        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
+        for raw_record in dataset:
+            input_dict = tf.io.parse_example(raw_record, self.feature_description)
+
+            # 对里面每个特征都进行一个预处理
+            target, parse_range_dict = self.feature_parse_model(input_dict)
+
+            target_pos = self.base_transform(target)
+            target_neg = self._generate_neg(target, parse_range_dict, batch_size)
+            label_dict = tf.io.parse_example(raw_record, self.label_description)
+            yield target, target_pos, target_neg, label_dict
+
+    def create_dataset(self, tfrecord_filenames, batch_size):
+
+        # dataset = tf.data.TFRecordDataset(tfrecord_filenames)
+        # dataset = dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+        # for raw_record in dataset:
+        #     input_dict = tf.io.parse_example(raw_record, self.feature_description)
+        #     # input_dict, target_pos, target_neg = self.process_single_example(example_proto)
+        #     # 对里面每个特征都进行一个预处理
+        #     parse_input_dict, parse_range_dict = self.feature_parse_model(input_dict)
+        #
+        #     time1 = time.time()
+        #     target_pos = self.base_transform(parse_input_dict)
+        #     time2 = time.time()
+        #     target_neg = self._generate_neg(parse_input_dict, parse_range_dict, batch_size)
+        #     time3 = time.time()
+        #     label_dict = tf.io.parse_example(raw_record, self.label_description)
+        #     print(f"pos：{time2 - time1:.2f}s，neg: {time3 - time2:.2f}")
+
+        # # 添加其他所需操作，例如batching和prefetching
+
+        # self.example_generator(tfrecord_filenames, batch_size)
+
+        output_signature = (
+            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
+            {"label": tf.TensorSpec(shape=(batch_size, 1), dtype="int64")}
+        )
+        dataset = tf.data.Dataset.from_generator(
+            lambda: self.example_generator(tfrecord_filenames, batch_size),
+            output_signature=output_signature
+        )
+        return dataset
+
+    def _generate_neg(self, input_dict, input_range_dict, batch_size):
+        """
+        产生负样本, 我们将每个特征都随机选择一个值
+        """
+        copied_input_dict = {}
+        for key in input_dict:
+            # 对于input_dict中的每个键，生成一个范围在0到input_range_dict[key]之间的随机整数张量
+            copied_input_dict[key] = fp.generate_random_int_tensor_tf(batch_size, 0, input_range_dict[key])
+        return copied_input_dict

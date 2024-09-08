@@ -7,7 +7,7 @@ from keras import activations, initializers, regularizers, constraints, optimize
 
 import utils.nn_utils as nn
 import datetime
-from data_process import data_process
+from data_process import dataset_process
 
 if __name__ == '__main__':
     inputs, tensor_dict = fr.get_basic_feature_representation()
