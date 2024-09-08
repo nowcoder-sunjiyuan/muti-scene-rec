@@ -30,7 +30,7 @@ if __name__ == '__main__':
     tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir)
 
     # 获取dataset
-    dataset, test_dataset = data_process.train_test_dataset(1024)
+    dataset, test_dataset = dataset_process.train_test_dataset(1024)
     # 训练数据
     es = keras.callbacks.EarlyStopping(monitor='val_ctr_auc', patience=1, mode="max", restore_best_weights=True)
     time1 = datetime.datetime.now()

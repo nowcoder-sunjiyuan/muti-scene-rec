@@ -9,7 +9,7 @@ import utils.base_tool as base_tool
 from keras import layers
 
 # 可以去看 dataset 的 jupyter
-dataset, test_dataset = data_process.train_test_dataset(1024)
+dataset, test_dataset = dataset_process.train_test_dataset(1024)
 
 l2_reg = 0.0000025
 L2REG = keras.regularizers.L2(l2_reg)
@@ -54,7 +54,7 @@ features = base_tool.MultiIODict(features)
 
 def get_basic_feature_representation():
     # 给所有特征建立 tensor
-    inputs = data_process.build_input_tensor()
+    inputs = dataset_process.build_input_tensor()
     not_input_features = "label"
     input_list = [v for k, v in inputs.items() if k not in not_input_features]
 
@@ -69,8 +69,8 @@ def get_basic_feature_representation():
     )
 
     # (none, 1)  -> (none, 16) 性别
-    tensor_dict['gender', 'author_gender'] = nn.string_lookup_embedding(inputs=inputs['gender', 'author_gender'],
-                                                                        voc_list=GENDER_VOC, name='gender')
+    # tensor_dict['gender', 'author_gender'] = nn.string_lookup_embedding(inputs=inputs['gender', 'author_gender'],
+    #                                                                     voc_list=GENDER_VOC, name='gender')
     # (none, 1)  -> (none, 16) 学校
     tensor_dict['school', 'author_school'] = nn.string_lookup_embedding(inputs=inputs['school', 'author_school'],
                                                                         voc_list=SCHOOL_TYPE_VOC, name='school')
@@ -81,11 +81,11 @@ def get_basic_feature_representation():
         name='school_major'
     )
     # (none, 1) -> (none, 16) 学校类型，211，985
-    tensor_dict['school_type', 'author_school_type'] = nn.string_lookup_embedding(
-        inputs=inputs['school_type', 'author_school_type'],
-        voc_list=SCHOOL_TYPE_VOC,
-        name='school_type'
-    )
+    # tensor_dict['school_type', 'author_school_type'] = nn.string_lookup_embedding(
+    #     inputs=inputs['school_type', 'author_school_type'],
+    #     voc_list=SCHOOL_TYPE_VOC,
+    #     name='school_type'
+    # )
 
     # (none, 1) -> (none) 工作状态，就是是否找工作
     tensor_dict['work_status_detail'] = nn.hash_lookup_embedding(
@@ -95,21 +95,29 @@ def get_basic_feature_representation():
     )
 
     # (none, 1) -> (none, 16) ??? 工作状态？？暂时不确定
-    tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
-        inputs=inputs['edu_work_status', 'author_edu_work_status'],
-        voc_list=EDU_WORK_STATUS_VOC,
-        name='edu_work_status'
-    )
+    # tensor_dict['edu_work_status', 'author_edu_work_status'] = nn.integer_lookup_embedding(
+    #     inputs=inputs['edu_work_status', 'author_edu_work_status'],
+    #     voc_list=EDU_WORK_STATUS_VOC,
+    #     name='edu_work_status'
+    # )
 
     # 一级意向职位 (none, 1) -> (none, 16)
-    tensor_dict['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'] = nn.string_lookup_embedding(
-        inputs=inputs['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'],
-        voc_list=CAREER_JOB1_1_VOC,
-        name='career_job1_1'
-    )
+    # tensor_dict['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'] = nn.string_lookup_embedding(
+    #     inputs=inputs['career_job1_1', 'author_career_job1_1', 'manual_career_job_1'],
+    #     voc_list=CAREER_JOB1_1_VOC,
+    #     name='career_job1_1'
+    # )
 
     # 二级意向职位 (none, 1) -> (none, 16)
-    cj2 = ("career_job1_2", "career_job2_2", "career_job3_2", "author_career_job1_2", "manual_career_job_2")
+    # cj2 = ("career_job1_2", "career_job2_2", "career_job3_2", "author_career_job1_2", "manual_career_job_2")
+    # cj2 = tuple(fea for fea in cj2 if fea in inputs)
+    # tensor_dict[cj2] = nn.string_lookup_embedding(
+    #     inputs=inputs[cj2],
+    #     voc_list=CAREER_JOB1_1_VOC,
+    #     name='career_job1_2'
+    # )
+
+    cj2 = ("career_job1_2", "author_career_job1_2", "manual_career_job_2")
     cj2 = tuple(fea for fea in cj2 if fea in inputs)
     tensor_dict[cj2] = nn.string_lookup_embedding(
         inputs=inputs[cj2],
@@ -117,14 +125,15 @@ def get_basic_feature_representation():
         name='career_job1_2'
     )
 
+
     # 三级意向职位 (none, 1) -> (none, 16)
-    cj3 = ("career_job1_3", "career_job2_3", "career_job3_3", "author_career_job1_3")
-    cj3 = tuple(fea for fea in cj3 if fea in inputs)
-    tensor_dict[cj3] = nn.hash_lookup_embedding(
-        inputs=inputs[cj3],
-        name="career_job1_3",
-        num_bins=1000,
-    )
+    # cj3 = ("career_job1_3", "career_job2_3", "career_job3_3", "author_career_job1_3")
+    # cj3 = tuple(fea for fea in cj3 if fea in inputs)
+    # tensor_dict[cj3] = nn.hash_lookup_embedding(
+    #     inputs=inputs[cj3],
+    #     name="career_job1_3",
+    #     num_bins=1000,
+    # )
 
     # 工作时间，毕业时间距离今年的距离，可能为负数， workYea已经被处理成区间表示
     work_year_embedding_layer = layers.Embedding(
@@ -148,112 +157,112 @@ def get_basic_feature_representation():
     """
     回复数量，喜欢数量，曝光数量
     """
-    reply_number_embedding_layer = layers.Embedding(
-        input_dim=len(REPLY_NUMBER_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='reply_number_embedding_layer'
-    )
-    tensor_dict['reply_number'] = reshape_layer(reply_number_embedding_layer(inputs['reply_number']))
-
-    like_number_embedding_layer = layers.Embedding(
-        input_dim=len(LIKE_NUMBER_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='like_number_embedding_layer'
-    )
-    tensor_dict['like_number'] = reshape_layer(like_number_embedding_layer(inputs['like_number']))
-
-    view_number_embedding_layer = layers.Embedding(
-        input_dim=len(VIEW_NUMBER_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='view_number_embedding_layer'
-    )
-    tensor_dict['view_number'] = reshape_layer(view_number_embedding_layer(inputs['view_number']))
+    # reply_number_embedding_layer = layers.Embedding(
+    #     input_dim=len(REPLY_NUMBER_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='reply_number_embedding_layer'
+    # )
+    # tensor_dict['reply_number'] = reshape_layer(reply_number_embedding_layer(inputs['reply_number']))
+    #
+    # like_number_embedding_layer = layers.Embedding(
+    #     input_dim=len(LIKE_NUMBER_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='like_number_embedding_layer'
+    # )
+    # tensor_dict['like_number'] = reshape_layer(like_number_embedding_layer(inputs['like_number']))
+    #
+    # view_number_embedding_layer = layers.Embedding(
+    #     input_dim=len(VIEW_NUMBER_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='view_number_embedding_layer'
+    # )
+    # tensor_dict['view_number'] = reshape_layer(view_number_embedding_layer(inputs['view_number']))
 
     """
     post_module, content_module
     """
-    post_module_embedding_layer = layers.Embedding(
-        input_dim=13,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='post_module_embedding_layer'
-    )
-    tensor_dict['post_module'] = reshape_layer(post_module_embedding_layer(inputs['post_module']))
-
-    content_module_embedding_layer = layers.Embedding(
-        input_dim=4,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='content_module_embedding_layer'
-    )
-    tensor_dict['content_module'] = reshape_layer(content_module_embedding_layer(inputs['content_mode']))
+    # post_module_embedding_layer = layers.Embedding(
+    #     input_dim=13,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='post_module_embedding_layer'
+    # )
+    # tensor_dict['post_module'] = reshape_layer(post_module_embedding_layer(inputs['post_module']))
+    #
+    # content_module_embedding_layer = layers.Embedding(
+    #     input_dim=4,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='content_module_embedding_layer'
+    # )
+    # tensor_dict['content_module'] = reshape_layer(content_module_embedding_layer(inputs['content_mode']))
 
     """
     TAXONOMY1, TAXONOMY2
     """
-    tensor_dict['taxonomy1'] = nn.string_lookup_embedding(inputs=inputs['taxonomy1'],
-                                                          voc_list=TAXONOMY1_VOC, name='taxonomy1')
-    tensor_dict['taxonomy2'] = nn.string_lookup_embedding(inputs=inputs['taxonomy2'],
-                                                          voc_list=TAXONOMY2_VOC, name='taxonomy2')
+    # tensor_dict['taxonomy1'] = nn.string_lookup_embedding(inputs=inputs['taxonomy1'],
+    #                                                       voc_list=TAXONOMY1_VOC, name='taxonomy1')
+    # tensor_dict['taxonomy2'] = nn.string_lookup_embedding(inputs=inputs['taxonomy2'],
+    #                                                       voc_list=TAXONOMY2_VOC, name='taxonomy2')
 
     """
     form
     """
-    form_embedding_layer = layers.Embedding(
-        input_dim=6,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='form_embedding_layer'
-    )
-    tensor_dict['form'] = reshape_layer(form_embedding_layer(inputs['form']))
+    # form_embedding_layer = layers.Embedding(
+    #     input_dim=6,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='form_embedding_layer'
+    # )
+    # tensor_dict['form'] = reshape_layer(form_embedding_layer(inputs['form']))
 
     """
     ctr
     """
-    ctr_embedding_layer = layers.Embedding(
-        input_dim=len(CTR_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='ctr_embedding_layer'
-    )
-    tensor_dict['ctr'] = reshape_layer(ctr_embedding_layer(inputs['ctr']))
-    ctr_3_embedding_layer = layers.Embedding(
-        input_dim=len(CTR_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='ctr_3_embedding_layer'
-    )
-    tensor_dict['ctr_3'] = reshape_layer(ctr_3_embedding_layer(inputs['ctr_3']))
-    ctr_7_embedding_layer = layers.Embedding(
-        input_dim=len(CTR_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='ctr_7_embedding_layer'
-    )
-    tensor_dict['ctr_7'] = reshape_layer(ctr_7_embedding_layer(inputs['ctr_7']))
-    career_job_ctr_embedding_layer = layers.Embedding(
-        input_dim=len(CTR_BOUND) + 1,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='career_job_ctr_embedding_layer'
-    )
-    tensor_dict['career_job_ctr'] = reshape_layer(career_job_ctr_embedding_layer(inputs['career_job_ctr']))
+    # ctr_embedding_layer = layers.Embedding(
+    #     input_dim=len(CTR_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='ctr_embedding_layer'
+    # )
+    # tensor_dict['ctr'] = reshape_layer(ctr_embedding_layer(inputs['ctr']))
+    # ctr_3_embedding_layer = layers.Embedding(
+    #     input_dim=len(CTR_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='ctr_3_embedding_layer'
+    # )
+    # tensor_dict['ctr_3'] = reshape_layer(ctr_3_embedding_layer(inputs['ctr_3']))
+    # ctr_7_embedding_layer = layers.Embedding(
+    #     input_dim=len(CTR_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='ctr_7_embedding_layer'
+    # )
+    # tensor_dict['ctr_7'] = reshape_layer(ctr_7_embedding_layer(inputs['ctr_7']))
+    # career_job_ctr_embedding_layer = layers.Embedding(
+    #     input_dim=len(CTR_BOUND) + 1,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='career_job_ctr_embedding_layer'
+    # )
+    # tensor_dict['career_job_ctr'] = reshape_layer(career_job_ctr_embedding_layer(inputs['career_job_ctr']))
 
     """
-    day_delta
+    day_delta: 这个删除，数据存在问题
     """
     # day_delta_embedding_layer = layers.Embedding(
     #     input_dim=len(DAY_DELTA_BOUND) + 1,
@@ -267,14 +276,14 @@ def get_basic_feature_representation():
     """
     week_day
     """
-    week_day_embedding_layer = layers.Embedding(
-        input_dim=7,
-        output_dim=16,
-        embeddings_regularizer=L2REG,
-        embeddings_initializer='glorot_normal',
-        name='week_day_embedding_layer'
-    )
-    tensor_dict['week_day'] = reshape_layer(week_day_embedding_layer(inputs['week_day']))
+    # week_day_embedding_layer = layers.Embedding(
+    #     input_dim=7,
+    #     output_dim=16,
+    #     embeddings_regularizer=L2REG,
+    #     embeddings_initializer='glorot_normal',
+    #     name='week_day_embedding_layer'
+    # )
+    # tensor_dict['week_day'] = reshape_layer(week_day_embedding_layer(inputs['week_day']))
 
     """
     平台，platform
@@ -300,48 +309,56 @@ def get_basic_feature_representation():
     expo_not_click_entity_id: 曝光未点击的物品id，expo_not_click_max_len是长度
     comment_list_entity_id: 评论的物品id，comment_list_max_len是长度
     """
-    entity_id_cols = ("entity_id", "hist_entity_id", "comment_list_entity_id")
-    entity_id, hist_entity_id, comment_list_entity_id = nn.hash_lookup_embedding(
-        inputs=inputs[entity_id_cols],
+    # entity_id_cols = ("entity_id", "hist_entity_id", "comment_list_entity_id")
+    # entity_id, hist_entity_id, comment_list_entity_id = nn.hash_lookup_embedding(
+    #     inputs=inputs[entity_id_cols],
+    #     name="entity_id",
+    #     num_bins=100000,
+    # )
+    # tensor_dict['entity_id_emb'] = entity_id
+    # tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id, inputs[
+    #     'company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    # # tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id, inputs[
+    # #     'expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
+    # tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id, inputs[
+    #     'comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
+
+    entity_id = nn.hash_lookup_embedding(
+        inputs=inputs["entity_id"],
+        embedding_dimension=32,
         name="entity_id",
         num_bins=100000,
     )
-    tensor_dict['entity_id_emb'] = entity_id
-    tensor_dict['hist_entity_id_emb'] = nn.ReduceMeanWithMask(20)(hist_entity_id, inputs[
-        'company_keyword_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    # tensor_dict['expo_not_click_entity_id_emb'] = nn.ReduceMeanWithMask(20)(expo_not_click_entity_id, inputs[
-    #     'expo_not_click_max_len'])  # (none, 20, 16) (none, 1) -> (none, 16)
-    tensor_dict['comment_list_entity_id_emb'] = nn.ReduceMeanWithMask(10)(comment_list_entity_id, inputs[
-        'comment_list_max_len'])  # (none, 10, 16) (none, 1) -> (none, 16)
+    tensor_dict['entity_id'] = entity_id
 
     """
     5个公司id，和对应的权重，short_term_company (hash) (none, 5) 代表五个公司的id
     """
-    st_company_col = features['short_term_companies']
-    st_company_emb_origin = nn.hash_lookup_embedding(inputs=inputs['short_term_companies'], num_bins=10000,
-                                                     embedding_dimension=16,
-                                                     embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
-                                                     name='short_term_companies')  # (none, 5, 16)
-    # softmax作用在最后一个维度, 从(none, 5) -> (none, 5, 1)
-    st_companies_weights = layers.Softmax(axis=-1)(inputs['short_term_companies_weights'])  # (none, 5)
-    st_companies_weights = nn.ExpandDimsLayer(-1)(st_companies_weights)  # (None, 5, 1)
-    # 将这5个向量加权求和  reduce((None,5,16) * (none,5,1))
-    tensor_dict['st_companies_emb'] = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)  # (none, 16)
-    # st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
-    # st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
+    # st_company_col = features['short_term_companies']
+    # st_company_emb_origin = nn.hash_lookup_embedding(inputs=inputs['short_term_companies'], num_bins=10000,
+    #                                                  embedding_dimension=16,
+    #                                                  embedding_regularizer=L2REG, embedding_initializer='glorot_normal',
+    #                                                  name='short_term_companies')  # (none, 5, 16)
+    # # softmax作用在最后一个维度, 从(none, 5) -> (none, 5, 1)
+    # st_companies_weights = layers.Softmax(axis=-1)(inputs['short_term_companies_weights'])  # (none, 5)
+    # st_companies_weights = nn.ExpandDimsLayer(-1)(st_companies_weights)  # (None, 5, 1)
+    # # 将这5个向量加权求和  reduce((None,5,16) * (none,5,1))
+    # tensor_dict['st_companies_emb'] = nn.ReduceSumLayer(1)(st_company_emb_origin * st_companies_weights)  # (none, 16)
+    # # st_companies_weights = tf.expand_dims(tf.nn.softmax(features["short_term_companies_weights"]), axis=-1)  # (None,5,1)
+    # # st_companies_emb = tf.reduce_sum(st_company_emb_origin * st_companies_weights, axis=1) # (none, 16)
 
     """
     company_keyword (hash) (none, 3) 这个是公司的关键字, 对公司向量求平均
     """
-    company_keyword_col = features['company_keyword']
-    company_keyword_origin = nn.hash_lookup_embedding(inputs=inputs['company_keyword'], num_bins=10000,
-                                                      embedding_dimension=16,
-                                                      embedding_regularizer=L2REG,
-                                                      embedding_initializer='glorot_normal',
-                                                      name='company_keyword')  # (none, 3, 16)
-    company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
-    tensor_dict['company_keyword_emb'] = nn.ReduceMeanWithMask(3)(company_keyword_origin,
-                                                                  inputs['company_keyword_max_len'])  # (none, 16)
+    # company_keyword_col = features['company_keyword']
+    # company_keyword_origin = nn.hash_lookup_embedding(inputs=inputs['company_keyword'], num_bins=10000,
+    #                                                   embedding_dimension=16,
+    #                                                   embedding_regularizer=L2REG,
+    #                                                   embedding_initializer='glorot_normal',
+    #                                                   name='company_keyword')  # (none, 3, 16)
+    # company_keyword_max_len_col = features['company_keyword_max_len']  # (none, 1)
+    # tensor_dict['company_keyword_emb'] = nn.ReduceMeanWithMask(3)(company_keyword_origin,
+    #                                                               inputs['company_keyword_max_len'])  # (none, 16)
     return input_list, tensor_dict
 
 

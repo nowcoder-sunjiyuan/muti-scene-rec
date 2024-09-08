@@ -48,9 +48,9 @@ def win_train_test_file():
 
 
 def linux_train_test_file():
-    start_time = datetime.datetime(2024, 5, 11, 0, 0, 0)
-    train_days_num = 10
-    test_days_num = 1
+    start_time = datetime.datetime(2024, 7, 1, 0, 0, 0)
+    train_days_num = 14
+    test_days_num = 2
     data_path = '/opt/data/'
 
     train_files, test_files = [], []

@@ -4,6 +4,7 @@ from models.FeatureEmbModel import FeatureEmbModel
 import utils.nn_utils as nn
 import keras
 import time
+from mmoe import mmoe
 
 
 def cross_entropy(target, pos, neg):
@@ -34,8 +35,10 @@ optimizer = keras.optimizers.Adam(0.0003)
 # emb层
 feature_emb_model = FeatureEmbModel()
 # 全连接层
-# ctr_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')
-ctr_output = keras.layers.Dense(1, activation='sigmoid')
+mmoe_layer = mmoe.MMoE(units=128, num_experts=8, num_tasks=1)
+ctr_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')
+
+# ctr_output = keras.layers.Dense(1, activation='sigmoid')
 num_batches = 0
 # 开始训练
 for epoch in range(3):
@@ -60,7 +63,7 @@ for epoch in range(3):
             # 对比学习损失
             rec_cf_loss = cross_entropy(target_emb, target_pos_emb, target_neg_emb)
             # 交叉熵
-            ctr_predictions = ctr_output(target_emb)
+            ctr_predictions = ctr_output(mmoe_layer(target_emb))
             ctr_loss = keras.losses.binary_crossentropy(label['label'], ctr_predictions)
             ctr_loss = tf.reduce_mean(ctr_loss).numpy()
 

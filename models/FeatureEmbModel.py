@@ -163,7 +163,7 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             "work_year": None,
             "edu_level": edu_level_layer,
             "uid": uid_layer,
-            "manual_career_job_1": career_job_layer,
+            "manual_career_job_2": career_job_layer,
 
             "author_uid": uid_layer,
             "author_career_job1_2": career_job_layer,
@@ -183,7 +183,7 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             "work_year": len(WORK_YEAR_BOUND) + 1,
             "edu_level": len(edu_level_layer.get_vocabulary()) + 1,
             "uid": 100000,
-            "manual_career_job_1": len(career_job_layer.get_vocabulary()) + 1,
+            "manual_career_job_2": len(career_job_layer.get_vocabulary()) + 1,
 
             "author_uid": 100000,
             "author_career_job1_2": len(career_job_layer.get_vocabulary()) + 1,
@@ -227,7 +227,7 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             "work_year": work_year_emb,
             "edu_level": edu_level_emb,
             "uid": uid_emb,
-            "manual_career_job_1": career_job_emb,
+            "manual_career_job_2": career_job_emb,
 
             "author_uid": uid_emb,
             "author_career_job1_2": career_job_emb,
