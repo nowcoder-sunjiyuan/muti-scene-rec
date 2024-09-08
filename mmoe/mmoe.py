@@ -167,12 +167,12 @@ class MMoE(layers.Layer):
         final_outputs = []
 
         # f_{i}(x) = activation(W_{i} * x + b), 论文中激活函数是ReLU
-        expert_outputs = tf.tensordot(a=inputs, b=self.expert_kernels, axes=1)  # (none, 4, 8)
+        expert_outputs = tf.tensordot(a=inputs, b=self.expert_kernels, axes=1)  # (none, 128 8)
         # 添加偏置，先将偏置调整成可以相加的形状
         if self.use_expert_bias:
             expert_bias_reshaped = tf.reshape(self.expert_bias, (1, self.units, self.num_experts))
-            expert_outputs += expert_bias_reshaped  # 广播机制，(none, 4, 8) 与 偏置 (1, 4, 8)相加，右对齐后，扩展
-        expert_outputs = self.expert_activation(expert_outputs)  # (none, 4, 8) 8个专家每个输出(none, 4)
+            expert_outputs += expert_bias_reshaped  # 广播机制，(none, 128, 8) 与 偏置 (1, 128, 8)相加，右对齐后，扩展
+        expert_outputs = self.expert_activation(expert_outputs)  # (none, 128, 8) 8个专家每个输出(none, 4)
 
         # g^{k}(x) = activation(W_{gk} * x + b), 激活函数softmax
         for index, gate_kernel in enumerate(self.gate_kernels):

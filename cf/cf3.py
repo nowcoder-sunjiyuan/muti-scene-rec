@@ -13,10 +13,8 @@ def cross_entropy(target, pos, neg):
     neg_logits = tf.reduce_sum(neg * target, axis=-1)
 
     # 计算损失
-    # pos_loss = -tf.math.log(tf.sigmoid(pos_logits) + 1e-24)  # 距离更近
-    # neg_loss = -tf.math.log(1 - tf.sigmoid(neg_logits) + 1e-24)  # 距离更远
-    pos_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(pos_logits), logits=pos_logits)
-    neg_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(neg_logits), logits=neg_logits)
+    pos_loss = -tf.math.log(tf.sigmoid(pos_logits) + 1e-24)  # 距离更近
+    neg_loss = -tf.math.log(1 - tf.sigmoid(neg_logits) + 1e-24)  # 距离更远
 
     # 由于不需要掩码，我们直接计算平均损失
     loss = tf.reduce_mean(pos_loss + neg_loss)
@@ -37,8 +35,7 @@ optimizer = keras.optimizers.Adam(0.0003)
 # emb层
 feature_emb_model = FeatureEmbModel()
 # 全连接层
-mmoe_layer = mmoe.MMoE(units=128, num_experts=8, num_tasks=1)
-ctr_output = nn.FullyConnectedTower([64, 32, 1], 'ctr', 'relu', 'sigmoid')
+ctr_output = nn.FullyConnectedTower([512, 256, 128, 64, 1], 'ctr', 'relu', 'sigmoid')
 
 # ctr_output = keras.layers.Dense(1, activation='sigmoid')
 num_batches = 0
@@ -63,7 +60,7 @@ for epoch in range(3):
             # 对比学习损失
             rec_cf_loss = cross_entropy(target_emb, target_pos_emb, target_neg_emb)
             # 交叉熵
-            ctr_predictions = ctr_output(mmoe_layer(target_emb)[0])
+            ctr_predictions = ctr_output(target_emb)
             ctr_loss = keras.losses.binary_crossentropy(label['label'], ctr_predictions)
             ctr_loss = tf.reduce_mean(ctr_loss)
 
@@ -73,8 +70,8 @@ for epoch in range(3):
             train_auc_metric.update_state(label['label'], ctr_predictions)
 
         start_time_backward_pass = time.time()
-        gradients = tape.gradient(combined_loss, feature_emb_model.trainable_variables + ctr_output.trainable_variables + mmoe_layer.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, feature_emb_model.trainable_variables + ctr_output.trainable_variables + mmoe_layer.trainable_variables))
+        gradients = tape.gradient(combined_loss, feature_emb_model.trainable_variables + ctr_output.trainable_variables)
+        optimizer.apply_gradients(zip(gradients, feature_emb_model.trainable_variables + ctr_output.trainable_variables))
         end_time_backward_pass = time.time()
         last_time = end_time = time.time()
 
@@ -82,13 +79,7 @@ for epoch in range(3):
         total_loss += combined_loss.numpy()
         total_ctr_loss += ctr_loss
 
-        print(
-            f"\rEpoch {epoch}, Step {i}, avg total loss: {total_loss / num_batches}, avg CTR loss: {total_ctr_loss / num_batches}, Train AUC: {train_auc_metric.result().numpy()}",
-            end='', flush=True)
-        if i % 4000 == 0:
-            print(
-                f"Epoch {epoch}, Step {i}, avg total loss: {total_loss / num_batches}, avg CTR loss: {total_ctr_loss / num_batches}, Train AUC: {train_auc_metric.result().numpy()}",
-                end='', flush=True)
+        print(f"\rEpoch {epoch}, Step {i}, avg total loss: {total_loss / num_batches}, avg CTR loss: {total_ctr_loss/num_batches}, Train AUC: {train_auc_metric.result().numpy()}", end='', flush=True)
         # print(
         #     f"Step {i} time stats - Forward Pass: {end_time_forward_pass - start_time_forward_pass}s, "
         #     f"Loss Calculation: {end_time_loss_calculation - start_time_loss_calculation}s, "
@@ -104,7 +95,7 @@ for epoch in range(3):
     auc_metric.reset_state()  # 重置状态，以便于新的评估开始
     for input_dict, target_pos, target_neg, label in valid_dataset:
         target_emb = feature_emb_model.call(input_dict, mode="embedding")
-        ctr_predictions = ctr_output(mmoe_layer(target_emb))
+        ctr_predictions = ctr_output(target_emb)
         auc_metric.update_state(label['label'], ctr_predictions)  # 更新状态，累积预测和标签
 
     auc_score = auc_metric.result().numpy()  # 计算AUC值

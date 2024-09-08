@@ -12,8 +12,8 @@ def cross_entropy(target, pos, neg):
     neg_logits = tf.reduce_sum(neg * target, axis=-1)
 
     # 计算损失
-    pos_loss = -tf.math.log(tf.sigmoid(pos_logits) + 1e-24)  # 距离更近
-    neg_loss = -tf.math.log(1 - tf.sigmoid(neg_logits) + 1e-24)  # 距离更远
+    pos_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(pos_logits), logits=pos_logits)
+    neg_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(neg_logits), logits=neg_logits)
 
     # 由于不需要掩码，我们直接计算平均损失
     loss = tf.reduce_mean(pos_loss + neg_loss)
@@ -21,7 +21,7 @@ def cross_entropy(target, pos, neg):
     return loss
 
 
-train_file, valid_file = dataset_process.linux_train_test_file()
+train_file, valid_file = dataset_process.win_train_test_file()
 data_process = dataset_process.DatasetProcess()
 train_dataset = data_process.create_dataset(train_file, 1024)
 # rec_cf_data_iter = enumerate(train_dataset)
@@ -47,8 +47,6 @@ for epoch in range(3):
     for (i, (input_dict, target_pos, target_neg, label)) in rec_cf_data_iter:  # 某个批次
 
         start_time = time.time()
-        if i > 0:
-            print(f"Step {i-1} time stats - generate data: {start_time - last_time}s ")
         with tf.GradientTape() as tape:
             start_time_forward_pass = time.time()
             target_emb = feature_emb_model.call(input_dict, mode="embedding")  # (1024, 304)
@@ -62,7 +60,7 @@ for epoch in range(3):
             # 交叉熵
             ctr_predictions = ctr_output(target_emb)
             ctr_loss = keras.losses.binary_crossentropy(label['label'], ctr_predictions)
-            ctr_loss = tf.reduce_mean(ctr_loss).numpy()
+            ctr_loss = tf.reduce_mean(ctr_loss)
 
             combined_loss = rec_cf_loss + ctr_loss
             end_time_loss_calculation = time.time()
@@ -80,6 +78,8 @@ for epoch in range(3):
         total_ctr_loss += ctr_loss
 
         print(f"\rEpoch {epoch}, Step {i}, avg total loss: {total_loss / num_batches}, avg CTR loss: {total_ctr_loss/num_batches}, Train AUC: {train_auc_metric.result().numpy()}", end='', flush=True)
+        if i % 4000 == 0:
+            print(f"Epoch {epoch}, Step {i}, avg total loss: {total_loss / num_batches}, avg CTR loss: {total_ctr_loss / num_batches}, Train AUC: {train_auc_metric.result().numpy()}", end='', flush=True)
         # print(
         #     f"Step {i} time stats - Forward Pass: {end_time_forward_pass - start_time_forward_pass}s, "
         #     f"Loss Calculation: {end_time_loss_calculation - start_time_loss_calculation}s, "
