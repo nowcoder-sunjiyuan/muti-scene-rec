@@ -9,7 +9,8 @@ import utils.nn_utils as nn
 import datetime
 from data_process import dataset_process
 
-class MMoE(layers.Layer):
+
+class MMoE(tf.keras.layers.Layer):
     """
     Multi-gate Mixture-of-Experts model.
     """
@@ -240,6 +241,7 @@ class MMoE(layers.Layer):
         base_config = super(MMoE, self).get_config()
 
         return dict(list(base_config.items()) + list(config.items()))
+
 
 if __name__ == '__main__':
     print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))

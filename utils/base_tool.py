@@ -62,3 +62,14 @@ class MultiIODict(dict):
 def read_vocabulary(file_path):
     with open(file_path, 'r', encoding='utf-8') as f:
         return [line.strip() for line in f.readlines()]
+
+
+platform_desc = {
+    0: "IOS",
+    1: "Android",
+    2: "web"
+}
+
+
+def reset_metric(auc):
+    auc

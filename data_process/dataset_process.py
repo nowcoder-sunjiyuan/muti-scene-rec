@@ -168,7 +168,7 @@ class DatasetProcess:
         }
         self.base_transform = self.augmentations["random"]
 
-    def example_generator(self, tfrecord_filenames, batch_size):
+    def example_generator_cl(self, tfrecord_filenames, batch_size):
         dataset = tf.data.TFRecordDataset(tfrecord_filenames)
         dataset = dataset.batch(batch_size)
 
@@ -176,12 +176,12 @@ class DatasetProcess:
             # 检查当前批次的大小是否等于batch_size
             return tf.equal(tf.shape(raw_record)[0], batch_size)
 
-        # 只保留大小等于batch_size的批次
+        # 只保留大小等于batch_size的批次，这个是为了舍弃最后那几个batch_size不符合要求的部分
         dataset = dataset.filter(filter_batch_size)
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
         for raw_record in dataset:
-            input_dict = tf.io.parse_example(raw_record, self.feature_description)
+            input_dict = tf.io.parse_example(raw_record, self.feature_description)  # dict
 
             # 对里面每个特征都进行一个预处理
             target, parse_range_dict = self.feature_parse_model(input_dict)
@@ -191,7 +191,7 @@ class DatasetProcess:
             label_dict = tf.io.parse_example(raw_record, self.label_description)
             yield target, target_pos, target_neg, label_dict
 
-    def create_dataset(self, tfrecord_filenames, batch_size):
+    def create_dataset_cl(self, tfrecord_filenames, batch_size):
 
         # dataset = tf.data.TFRecordDataset(tfrecord_filenames)
         # dataset = dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
@@ -220,7 +220,58 @@ class DatasetProcess:
             {"label": tf.TensorSpec(shape=(batch_size, 1), dtype="int64")}
         )
         dataset = tf.data.Dataset.from_generator(
-            lambda: self.example_generator(tfrecord_filenames, batch_size),
+            lambda: self.example_generator_cl(tfrecord_filenames, batch_size),
+            output_signature=output_signature
+        )
+        return dataset
+
+    def example_generator_normal(self, tfrecord_filenames, batch_size):
+        dataset = tf.data.TFRecordDataset(tfrecord_filenames)
+        dataset = dataset.batch(batch_size)
+
+        def filter_batch_size(raw_record):
+            # 检查当前批次的大小是否等于batch_size
+            return tf.equal(tf.shape(raw_record)[0], batch_size)
+
+        # 只保留大小等于batch_size的批次，这个是为了舍弃最后那几个batch_size不符合要求的部分
+        dataset = dataset.filter(filter_batch_size)
+        dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
+
+        for raw_record in dataset:
+            input_dict = tf.io.parse_example(raw_record, self.feature_description)
+
+            # 对里面每个特征都进行一个预处理
+            target, parse_range_dict = self.feature_parse_model(input_dict)
+            label_dict = tf.io.parse_example(raw_record, self.label_description)
+            yield target, label_dict
+
+    def create_dataset_normal(self, tfrecord_filenames, batch_size):
+        """
+        创建数据集，普通方式
+        :param tfrecord_filenames:
+        :param batch_size:
+        :return:
+        """
+
+        dataset = tf.data.TFRecordDataset(tfrecord_filenames)
+        dataset = dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+        # for raw_record in dataset:
+        #     input_dict = tf.io.parse_example(raw_record, self.feature_description)
+        #     # input_dict, target_pos, target_neg = self.process_single_example(example_proto)
+        #     # 对里面每个特征都进行一个预处理
+        #     parse_input_dict, parse_range_dict = self.feature_parse_model(input_dict)
+        #     label_dict = tf.io.parse_example(raw_record, self.label_description)
+
+        # # 添加其他所需操作，例如batching和prefetching
+
+        # self.example_generator(tfrecord_filenames, batch_size)
+
+        output_signature = (
+            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
+            {"label": tf.TensorSpec(shape=(batch_size, 1), dtype="int64")}
+        )
+        dataset = tf.data.Dataset.from_generator(
+            lambda: self.example_generator_normal(tfrecord_filenames, batch_size),
             output_signature=output_signature
         )
         return dataset

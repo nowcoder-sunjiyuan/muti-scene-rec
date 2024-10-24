@@ -26,12 +26,12 @@ def cross_entropy(target, pos, neg):
 
 train_file, valid_file = dataset_process.win_train_test_file()
 data_process = dataset_process.DatasetProcess()
-train_dataset = data_process.create_dataset(train_file, 1024)
+train_dataset = data_process.create_dataset_cl(train_file, 1024)
 # rec_cf_data_iter = enumerate(train_dataset)
 # for (i, (input_dict)) in rec_cf_data_iter:
 #     print(input_dict)
 
-valid_dataset = data_process.create_dataset(valid_file, 1024)
+valid_dataset = data_process.create_dataset_cl(valid_file, 1024)
 
 optimizer = keras.optimizers.Adam(0.0003)
 # emb层

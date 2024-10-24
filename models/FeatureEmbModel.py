@@ -153,7 +153,8 @@ class FeatureEmbModel(tf.keras.layers.Layer):
         uid_layer = layers.Hashing(num_bins=100000, name=f"uid_hash_layer")
         edu_level_layer = layers.StringLookup(vocabulary=EDU_LEVEL_VOC, name=f"edu_level_lookup_layer")
         entity_id_layer = layers.Hashing(num_bins=100000, name=f"entity_layer")
-        platform_layer = layers.StringLookup(vocabulary=["<nan>", "iOS, Android", "web"], name=f"platform_lookup_layer")
+        # 注意转换的时候，<nan>是1，iOS是2，Android是3，web是4
+        platform_layer = layers.StringLookup(vocabulary=["<nan>", "iOS", "Android", "web"], name=f"platform_lookup_layer")
 
         self.feature_parse_dict = {
             "school": school_layer,

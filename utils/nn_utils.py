@@ -299,3 +299,18 @@ class IntegerLookupEmbeddingLayer(tf.keras.layers.Layer):
             'name': self.name
         })
         return config
+
+
+def cross_entropy(target, pos, neg):
+    # 计算正负样本的logits
+    pos_logits = tf.reduce_sum(pos * target, axis=-1)
+    neg_logits = tf.reduce_sum(neg * target, axis=-1)
+
+    # 计算损失
+    pos_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(pos_logits), logits=pos_logits)
+    neg_loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(neg_logits), logits=neg_logits)
+
+    # 由于不需要掩码，我们直接计算平均损失
+    loss = tf.reduce_mean(pos_loss + neg_loss)
+
+    return loss

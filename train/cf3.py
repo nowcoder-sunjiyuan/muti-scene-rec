@@ -4,32 +4,17 @@ from models.FeatureEmbModel import FeatureEmbModel
 import utils.nn_utils as nn
 import keras
 import time
-from mmoe import mmoe
-
-
-def cross_entropy(target, pos, neg):
-    # 计算正负样本的logits
-    pos_logits = tf.reduce_sum(pos * target, axis=-1)
-    neg_logits = tf.reduce_sum(neg * target, axis=-1)
-
-    # 计算损失
-    pos_loss = -tf.math.log(tf.sigmoid(pos_logits) + 1e-24)  # 距离更近
-    neg_loss = -tf.math.log(1 - tf.sigmoid(neg_logits) + 1e-24)  # 距离更远
-
-    # 由于不需要掩码，我们直接计算平均损失
-    loss = tf.reduce_mean(pos_loss + neg_loss)
-
-    return loss
+from mmoe_train import mmoe
 
 
 train_file, valid_file = dataset_process.win_train_test_file()
 data_process = dataset_process.DatasetProcess()
-train_dataset = data_process.create_dataset(train_file, 1024)
+train_dataset = data_process.create_dataset_cl(train_file, 1024)
 # rec_cf_data_iter = enumerate(train_dataset)
 # for (i, (input_dict)) in rec_cf_data_iter:
 #     print(input_dict)
 
-valid_dataset = data_process.create_dataset(valid_file, 1024)
+valid_dataset = data_process.create_dataset_cl(valid_file, 1024)
 
 optimizer = keras.optimizers.Adam(0.0003)
 # emb层
@@ -58,7 +43,7 @@ for epoch in range(3):
             end_time_forward_pass = time.time()
             start_time_loss_calculation = time.time()
             # 对比学习损失
-            rec_cf_loss = cross_entropy(target_emb, target_pos_emb, target_neg_emb)
+            rec_cf_loss = nn.cross_entropy(target_emb, target_pos_emb, target_neg_emb)
             # 交叉熵
             ctr_predictions = ctr_output(target_emb)
             ctr_loss = keras.losses.binary_crossentropy(label['label'], ctr_predictions)
