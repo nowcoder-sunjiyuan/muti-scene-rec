@@ -77,7 +77,7 @@ for epoch in range(3):
     print("\n")
     # 重置验证集指标
     mc.reset_valid_metrics()
-    for input_dict, target_pos, target_neg, label in valid_dataset:
+    for input_dict, target_pos, target_neg, seq_dict, label in valid_dataset:
         target_emb = feature_emb_model.call(input_dict, mode="embedding")
         cl_target = cl_expression_layer(target_emb)
         mmoe_emb = mmoe_layer(cl_target)

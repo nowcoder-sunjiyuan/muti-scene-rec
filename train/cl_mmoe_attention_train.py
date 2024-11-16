@@ -90,10 +90,24 @@ for epoch in range(3):
     print("\n")
     # 重置验证集指标
     mc.reset_valid_metrics()
-    for input_dict, target_pos, target_neg, label in valid_dataset:
+    for input_dict, target_pos, target_neg, seq_dict, label in valid_dataset:
+
+        # 序列层
+        seq_dict = feature_emb_model.call(seq_dict, mode="embedding_seq")
+        attention_result = attention_model(seq_dict['hist_entity_id'])  # (1024, 20, 32)
+        reduce_mean_attention_emb = tf.reduce_mean(attention_result, axis=1)
+
+        # 对比学习层
         target_emb = feature_emb_model.call(input_dict, mode="embedding")
         cl_target = cl_expression_layer(target_emb)
+
+        # 拼接
+        input_emb = tf.concat([cl_target, reduce_mean_attention_emb], axis=-1)
+
+        # mmoe层
         mmoe_emb = mmoe_layer(cl_target)
+
+        # 预测
         ctr_predictions = ctr_output(mmoe_emb[0])
         # 更新验证集指标
         platforms = tf.squeeze(input_dict['platform'])
