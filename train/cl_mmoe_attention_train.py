@@ -105,7 +105,7 @@ for epoch in range(3):
         input_emb = tf.concat([cl_target, reduce_mean_attention_emb], axis=-1)
 
         # mmoe层
-        mmoe_emb = mmoe_layer(cl_target)
+        mmoe_emb = mmoe_layer(input_emb)
 
         # 预测
         ctr_predictions = ctr_output(mmoe_emb[0])
