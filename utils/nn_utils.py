@@ -135,6 +135,24 @@ class ReduceMeanWithMask(Layer):
         return input_shape[0], input_shape[2]
 
 
+class ReduceMean(Layer):
+    """
+    对输入的序列数据直接求平均
+    """
+
+    def __init__(self, elem_type=tf.float32, **kwargs):
+        super(ReduceMean, self).__init__(**kwargs)
+        self.elem_type = elem_type
+
+    def call(self, inputs):
+        # 对第二个维度求平均
+        return tf.reduce_mean(inputs, axis=1)
+
+    def compute_output_shape(self, input_shape):
+        # 输出形状为 (batch_size, feature_dim)
+        return input_shape[0], input_shape[2]
+
+
 class FullyConnectedTower(keras.layers.Layer):
     """
     若干个全连接层组成的塔

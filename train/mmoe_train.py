@@ -57,15 +57,18 @@ for epoch in range(3):
 
     # Epoch结束，打印指标信息
     mc.log_train_metrics(False, epoch, 0, total_loss/num_batches)
+    print("\n")
 
     # 重置验证集指标
     mc.reset_valid_metrics()
     for input_dict, label in valid_dataset:
         target_emb = feature_emb_model.call(input_dict, mode="embedding")
         mmoe_emb = mmoe_layer(target_emb)
-        ctr_predictions = ctr_output(mmoe_emb)
+        ctr_predictions = ctr_output(mmoe_emb[0])
         # 更新验证集指标
-        mc.update_valid_metrics(label['label'], ctr_predictions, input_dict['platform'][0])
-
+        platforms = tf.squeeze(input_dict['platform'])
+        mc.update_valid_metrics(label['label'], ctr_predictions, platforms)
+        mc.log_valid_metrics()
     # 打印验证集指标
     mc.log_valid_metrics()
+    print("\n")

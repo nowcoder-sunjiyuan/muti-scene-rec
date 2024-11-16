@@ -54,10 +54,25 @@ class MetricsControllerOne:
             if platform.numpy() in self.train_platform_auc_metrics:
                 self.train_platform_auc_metrics[platform.numpy()].update_state(platform_labels, platform_predictions)
 
-    def update_valid_metrics(self, label, prediction, platform):
+    def update_valid_metrics(self, label, prediction, platforms):
         self.valid_auc_metric.update_state(label, prediction)
-        if platform in self.train_platform_auc_metrics:
-            self.valid_platform_auc_metrics[platform].update_state(label, prediction)
+
+        # 获取平台的唯一值
+        unique_platforms = tf.constant([2, 3, 4], dtype=tf.int64)  # (3,)
+
+        # 遍历每个唯一平台
+        for platform in unique_platforms:
+            # 找到属于当前平台的样本索引
+            platform_indices = tf.where(platforms == platform)  # platforms: (1024, ) result：(indices,1)
+            platform_indices = tf.squeeze(platform_indices)  # (indices,)
+
+            # 根据索引提取相应的标签和预测
+            platform_labels = tf.gather(label, platform_indices)
+            platform_predictions = tf.gather(prediction, platform_indices)
+
+            # 更新该平台的指标
+            if platform.numpy() in self.valid_platform_auc_metrics:
+                self.valid_platform_auc_metrics[platform.numpy()].update_state(platform_labels, platform_predictions)
 
     def log_train_metrics(self, in_epoch, epoch, step, avg_ctr_loss):
         if in_epoch:
@@ -79,4 +94,4 @@ class MetricsControllerOne:
         platform_output_log = ''
         for platform in self.valid_platform_auc_metrics.keys():
             platform_output_log += f"{platform_desc[platform]} AUC: {self.valid_platform_auc_metrics[platform].result().numpy()} ,"
-        print(f"Validation AUC: {self.valid_auc_metric.result().numpy()}, {platform_output_log}")
+        print(f"\rValidation AUC: {self.valid_auc_metric.result().numpy()}, {platform_output_log}", end='', flush=True)

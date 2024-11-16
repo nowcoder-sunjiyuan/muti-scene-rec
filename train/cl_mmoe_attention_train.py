@@ -1,6 +1,7 @@
 import tensorflow as tf
 from data_process import dataset_process
 from models.FeatureEmbModel import FeatureEmbModel
+from models.Attention import SelfAttention
 import utils.nn_utils as nn
 import keras
 import time
@@ -17,6 +18,8 @@ optimizer = keras.optimizers.Adam(0.0003)
 mc = trainers.MetricsControllerOne()
 # emb层
 feature_emb_model = FeatureEmbModel()
+# 注意力层
+attention_model = SelfAttention(32)
 # mmoe
 mmoe_layer = mmoe.MMoE(units=256, num_experts=4, num_tasks=1)
 # 对比学习表达层
@@ -41,6 +44,12 @@ for epoch in range(3):
             target_emb = feature_emb_model.call(input_dict, mode="embedding")  # (1024, 304)
             target_pos_emb = feature_emb_model.call(target_pos, mode="embedding")  # (1024, 304)
             target_neg_emb = feature_emb_model.call(target_neg, mode="embedding")  # (1024, 304)
+            seq_dict = feature_emb_model.call(seq_dict, mode="embedding_seq")
+
+            # 序列处理
+            attention_result = attention_model(seq_dict['hist_entity_id'])  # (1024, 20, 32)
+            reduce_mean_attention_emb = tf.reduce_mean(attention_result, axis=1)
+            # input_emb = tf.concat(target_emb, reduce_mean_attention_emb, axis=1)
 
             # 对比学习表示层
             cl_target = cl_expression_layer(target_emb)  # (1024, 256)
@@ -49,8 +58,12 @@ for epoch in range(3):
 
             # 对比学习损失
             cl_loss = nn.cross_entropy(cl_target, cl_pos, cl_neg)
+
+            # 对比学习表达和序列特征拼接
+            input_emb = tf.concat([cl_target, reduce_mean_attention_emb], axis=-1)
+
             # 交叉熵
-            mmoe_emb = mmoe_layer(cl_target)  # (1024, 256)
+            mmoe_emb = mmoe_layer(input_emb)  # (1024, 256)
             ctr_predictions = ctr_output(mmoe_emb[0])
             ctr_loss = keras.losses.binary_crossentropy(label['label'], ctr_predictions)
             ctr_loss = tf.reduce_mean(ctr_loss)

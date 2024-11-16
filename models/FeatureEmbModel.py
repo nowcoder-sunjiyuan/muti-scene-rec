@@ -173,7 +173,8 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             "author_edu_level": edu_level_layer,
             "author_work_year": None,
             "entity_id": entity_id_layer,
-            "platform": platform_layer
+            "platform": platform_layer,
+            "hist_entity_id": entity_id_layer
         }
 
         self.feature_range_dict = {
@@ -237,7 +238,9 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             "author_edu_level": edu_level_emb,
             "author_work_year": work_year_emb,
             "entity_id": entity_id_emb,
-            "platform": platform_emb
+            "platform": platform_emb,
+
+            "hist_entity_id": entity_id_emb
         }
 
     def _process_features(self, input_dict, layers_dict):
@@ -263,4 +266,6 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             reshaped_features = [tf.reshape(feature, (tf.shape(feature)[0], -1)) for feature in temp_dict.values()]
             concatenated_features = tf.keras.layers.concatenate(reshaped_features, axis=-1)
             return concatenated_features
+        elif mode == "embedding_seq":
+            return self._process_features(input_dict, self.emb_layers)
 

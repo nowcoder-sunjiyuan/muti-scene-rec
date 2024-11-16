@@ -20,8 +20,8 @@ TYPE_DICT = {'string': tf.string, 'int64': tf.int64, 'float32': tf.float32}
 
 def win_train_test_file():
     start_time = datetime.datetime(2024, 7, 1, 0, 0, 0)
-    train_days_num = 14
-    test_days_num = 2
+    train_days_num = 7
+    test_days_num = 1
     data_path = '/home/web/sunjiyuan/data/essm/v1'
 
     train_files, test_files = [], []
@@ -149,15 +149,24 @@ class DatasetProcess:
     def __init__(self):
         # 加载特征dict
         current_dir = os.path.dirname(__file__)
-        json_file = os.path.join(current_dir, 'input_feature_cf.json')
-        self.cf_features = json.load(open(json_file))
+        cl_json_file = os.path.join(current_dir, 'input_feature_cf.json')
+        seq_json_file = os.path.join(current_dir, 'input_feature_seq.json')
+        self.cl_features = json.load(open(cl_json_file))
+        self.seq_features = json.load(open(seq_json_file))
 
-        # 特征表示
-        self.feature_description = {}
+        # 对比学习部分相关的特征
+        self.cl_feature_description = {}
         self.features_name = []
-        for key, value in self.cf_features.items():
-            self.feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
+        for key, value in self.cl_features.items():
+            self.cl_feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
             self.features_name.append(key)
+
+        # 序列特征
+        self.seq_feature_description = {}
+        for key, value in self.seq_features.items():
+            self.seq_feature_description[key] = tf.io.FixedLenFeature(shape=(value[1],), dtype=TYPE_DICT[value[0]])
+
+        # label相关的特征
         self.label_description = {"label": tf.io.FixedLenFeature(shape=(1,), dtype="int64")}
         self.feature_parse_model = FeatureEmbModel()
 
@@ -181,42 +190,46 @@ class DatasetProcess:
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
         for raw_record in dataset:
-            input_dict = tf.io.parse_example(raw_record, self.feature_description)  # dict
+            cl_input_dict = tf.io.parse_example(raw_record, self.cl_feature_description)  # dict
 
-            # 对里面每个特征都进行一个预处理
-            target, parse_range_dict = self.feature_parse_model(input_dict)
+            # 对里面每个特征都进行一个预处理, 对比学习的特征处理部分
+            cl_target, parse_range_dict = self.feature_parse_model(cl_input_dict)
+            target_pos = self.base_transform(cl_target)
+            target_neg = self._generate_neg(cl_target, parse_range_dict, batch_size)
 
-            target_pos = self.base_transform(target)
-            target_neg = self._generate_neg(target, parse_range_dict, batch_size)
+            # 序列数据特征处理部分
+            seq_input_dict = tf.io.parse_example(raw_record, self.seq_feature_description)
+            seq_target, _ = self.feature_parse_model(seq_input_dict)
+
             label_dict = tf.io.parse_example(raw_record, self.label_description)
-            yield target, target_pos, target_neg, label_dict
+            yield cl_target, target_pos, target_neg, seq_target, label_dict
 
     def create_dataset_cl(self, tfrecord_filenames, batch_size):
 
         # dataset = tf.data.TFRecordDataset(tfrecord_filenames)
         # dataset = dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
         # for raw_record in dataset:
-        #     input_dict = tf.io.parse_example(raw_record, self.feature_description)
+        #     input_dict = tf.io.parse_example(raw_record, self.cl_feature_description)
         #     # input_dict, target_pos, target_neg = self.process_single_example(example_proto)
         #     # 对里面每个特征都进行一个预处理
         #     parse_input_dict, parse_range_dict = self.feature_parse_model(input_dict)
         #
-        #     time1 = time.time()
+        #     seq_dict = tf.io.parse_example(raw_record, self.seq_feature_description)
+        #     seq_input_dict, _ = self.feature_parse_model(seq_dict)
+        #
         #     target_pos = self.base_transform(parse_input_dict)
-        #     time2 = time.time()
         #     target_neg = self._generate_neg(parse_input_dict, parse_range_dict, batch_size)
-        #     time3 = time.time()
         #     label_dict = tf.io.parse_example(raw_record, self.label_description)
-        #     print(f"pos：{time2 - time1:.2f}s，neg: {time3 - time2:.2f}")
 
         # # 添加其他所需操作，例如batching和prefetching
 
         # self.example_generator(tfrecord_filenames, batch_size)
 
         output_signature = (
-            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
-            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
-            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, v[1]), dtype="int64") for k, v in self.cl_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, v[1]), dtype="int64") for k, v in self.cl_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, v[1]), dtype="int64") for k, v in self.cl_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, v[1]), dtype="int64") for k, v in self.seq_features.items()},
             {"label": tf.TensorSpec(shape=(batch_size, 1), dtype="int64")}
         )
         dataset = tf.data.Dataset.from_generator(
@@ -238,7 +251,7 @@ class DatasetProcess:
         dataset = dataset.prefetch(tf.data.experimental.AUTOTUNE)
 
         for raw_record in dataset:
-            input_dict = tf.io.parse_example(raw_record, self.feature_description)
+            input_dict = tf.io.parse_example(raw_record, self.cl_feature_description)
 
             # 对里面每个特征都进行一个预处理
             target, parse_range_dict = self.feature_parse_model(input_dict)
@@ -267,7 +280,7 @@ class DatasetProcess:
         # self.example_generator(tfrecord_filenames, batch_size)
 
         output_signature = (
-            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cf_features.items()},
+            {k: tf.TensorSpec(shape=(batch_size, 1), dtype="int64") for k, v in self.cl_features.items()},
             {"label": tf.TensorSpec(shape=(batch_size, 1), dtype="int64")}
         )
         dataset = tf.data.Dataset.from_generator(
