@@ -1,7 +1,7 @@
 import tensorflow as tf
 from data_process import dataset_process
 from models.FeatureEmbModel import FeatureEmbModel
-from models.Attention import SelfAttention
+from models.Attention import SelfAttention, EncoderLayer
 import utils.nn_utils as nn
 import keras
 import time
@@ -18,8 +18,8 @@ optimizer = keras.optimizers.Adam(0.0003)
 mc = trainers.MetricsControllerOne()
 # emb层
 feature_emb_model = FeatureEmbModel()
-# 注意力层
-attention_model = SelfAttention(32)
+# encode层
+attention_model = EncoderLayer(32, 32)
 # mmoe
 mmoe_layer = mmoe.MMoE(units=256, num_experts=4, num_tasks=1)
 # 对比学习表达层
@@ -47,7 +47,7 @@ for epoch in range(3):
             seq_dict = feature_emb_model.call(seq_dict, mode="embedding_seq")
 
             # 序列处理
-            attention_result = attention_model(seq_dict['hist_entity_id'])  # (1024, 20, 32)
+            attention_result = attention_model(seq_dict['hist_entity_id'], training=True)  # (1024, 20, 32)
             reduce_mean_attention_emb = tf.reduce_mean(attention_result, axis=1)
             # input_emb = tf.concat(target_emb, reduce_mean_attention_emb, axis=1)
 
@@ -94,7 +94,7 @@ for epoch in range(3):
 
         # 序列层
         seq_dict = feature_emb_model.call(seq_dict, mode="embedding_seq")
-        attention_result = attention_model(seq_dict['hist_entity_id'])  # (1024, 20, 32)
+        attention_result = attention_model(seq_dict['hist_entity_id'], training=False)  # (1024, 20, 32)
         reduce_mean_attention_emb = tf.reduce_mean(attention_result, axis=1)
 
         # 对比学习层
