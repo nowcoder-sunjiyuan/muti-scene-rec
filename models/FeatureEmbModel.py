@@ -141,6 +141,20 @@ class FeatureConvertAndEmbModel(tf.keras.layers.Layer):
 
 class FeatureEmbModel(tf.keras.layers.Layer):
 
+    def check_built_status(self):
+        """ 打印所有子层的构建状态 """
+        print(f"\n=== {self.name} Built Status ===")
+        print(f"Main Layer Built: {self.built}")
+
+        # 检查所有注册的子层
+        for attr_name in dir(self):
+
+            if attr_name in ['input', 'output', 'inputs', 'outputs']:
+                continue
+            attr = getattr(self, attr_name)
+            if isinstance(attr, tf.keras.layers.Layer):
+                print(f"Sub-layer '{attr_name}' Built: {attr.built}")
+
     def __init__(self, **kwargs):
         """
         :param embedding_dim: 每个特征的嵌入维度。
@@ -197,50 +211,50 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             "platform": len(platform_layer.get_vocabulary()) + 1
         }
 
-        school_emb = layers.Embedding(input_dim=len(school_layer.get_vocabulary()) + 1, output_dim=16,
+        self.school_emb = layers.Embedding(input_dim=len(school_layer.get_vocabulary()) + 1, output_dim=16,
                                       embeddings_regularizer=L2REG, embeddings_initializer='glorot_normal',
                                       name=f"school_embedding_layer")
-        school_major_emb = layers.Embedding(input_dim=len(school_major_layer.get_vocabulary()) + 1, output_dim=16,
+        self.school_major_emb = layers.Embedding(input_dim=len(school_major_layer.get_vocabulary()) + 1, output_dim=16,
                                             embeddings_regularizer=L2REG, embeddings_initializer='glorot_normal',
                                             name=f"school_major_embedding_layer")
-        work_status_emb = layers.Embedding(input_dim=5, output_dim=16, embeddings_initializer='glorot_normal',
+        self.work_status_emb = layers.Embedding(input_dim=5, output_dim=16, embeddings_initializer='glorot_normal',
                                            embeddings_regularizer=L2REG)
-        career_job_emb = layers.Embedding(input_dim=len(career_job_layer.get_vocabulary()) + 1, output_dim=16,
+        self.career_job_emb = layers.Embedding(input_dim=len(career_job_layer.get_vocabulary()) + 1, output_dim=16,
                                           embeddings_regularizer=L2REG, embeddings_initializer='glorot_normal',
                                           name=f"career_job_embedding_layer")
-        work_year_emb = layers.Embedding(input_dim=len(WORK_YEAR_BOUND) + 1, output_dim=16,
+        self.work_year_emb = layers.Embedding(input_dim=len(WORK_YEAR_BOUND) + 1, output_dim=16,
                                          embeddings_regularizer=L2REG, embeddings_initializer='glorot_normal',
                                          name='work_year_embedding_layer')
-        edu_level_emb = layers.Embedding(input_dim=len(edu_level_layer.get_vocabulary()) + 1, output_dim=16,
+        self.edu_level_emb = layers.Embedding(input_dim=len(edu_level_layer.get_vocabulary()) + 1, output_dim=16,
                                          embeddings_regularizer=L2REG, embeddings_initializer='glorot_normal',
                                          name=f"edu_level_embedding_layer")
-        uid_emb = layers.Embedding(input_dim=100000, output_dim=32, embeddings_initializer='glorot_normal',
+        self.uid_emb = layers.Embedding(input_dim=100000, output_dim=32, embeddings_initializer='glorot_normal',
                                    embeddings_regularizer=L2REG)
-        entity_id_emb = layers.Embedding(input_dim=100000, output_dim=32, embeddings_initializer='glorot_normal',
+        self.entity_id_emb = layers.Embedding(input_dim=100000, output_dim=32, embeddings_initializer='glorot_normal',
                                          embeddings_regularizer=L2REG)
-        platform_emb = layers.Embedding(input_dim=len(platform_layer.get_vocabulary()) + 1, output_dim=16,
+        self.platform_emb = layers.Embedding(input_dim=len(platform_layer.get_vocabulary()) + 1, output_dim=16,
                                         embeddings_regularizer=L2REG, embeddings_initializer='glorot_normal',
                                         name=f"platform_embedding_layer")
         self.emb_layers = {
-            "school": school_emb,
-            "school_major": school_major_emb,
-            "work_status_detail": work_status_emb,
-            "career_job1_2": career_job_emb,
-            "work_year": work_year_emb,
-            "edu_level": edu_level_emb,
-            "uid": uid_emb,
-            "manual_career_job_2": career_job_emb,
+            "school": self.school_emb,
+            "school_major": self.school_major_emb,
+            "work_status_detail": self.work_status_emb,
+            "career_job1_2": self.career_job_emb,
+            "work_year": self.work_year_emb,
+            "edu_level": self.edu_level_emb,
+            "uid": self.uid_emb,
+            "manual_career_job_2": self.career_job_emb,
 
-            "author_uid": uid_emb,
-            "author_career_job1_2": career_job_emb,
-            "author_school": school_emb,
-            "author_school_major": school_major_emb,
-            "author_edu_level": edu_level_emb,
-            "author_work_year": work_year_emb,
-            "entity_id": entity_id_emb,
-            "platform": platform_emb,
+            "author_uid": self.uid_emb,
+            "author_career_job1_2": self.career_job_emb,
+            "author_school": self.school_emb,
+            "author_school_major": self.school_major_emb,
+            "author_edu_level": self.edu_level_emb,
+            "author_work_year": self.work_year_emb,
+            "entity_id": self.entity_id_emb,
+            "platform": self.platform_emb,
 
-            "hist_entity_id": entity_id_emb
+            "hist_entity_id": self.entity_id_emb
         }
 
     def _process_features(self, input_dict, layers_dict):
@@ -256,6 +270,11 @@ class FeatureEmbModel(tf.keras.layers.Layer):
             else:
                 result_dict[feature_name] = feature_value
         return result_dict
+
+    def build(self, input_shape=None):
+        # 显式标记主层已构建
+        self.built = True
+        super().build(input_shape)
 
     def call(self, input_dict, mode="lookup"):
         if mode == "lookup":

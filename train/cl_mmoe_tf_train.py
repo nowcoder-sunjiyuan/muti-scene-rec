@@ -1,13 +1,16 @@
 import tensorflow as tf
 from data_process import dataset_process
 from models.FeatureEmbModel import FeatureEmbModel
-from models.Attention import SelfAttention, EncoderLayerSelfAtt, EncoderLayerMultiHeadAtt
+from models.Attention import SelfAttention, EncoderLayerSelfAtt, EncoderLayerMultiHeadAtt, EncoderLayerTimeEn, \
+    EncoderLayerConvTimeEn
 import utils.nn_utils as nn
 import keras
 import time
 from mmoe import mmoe
 import trainers
 
+# 输入的参数
+encoder_type = "v4"
 
 train_file, valid_file = dataset_process.win_train_test_file()
 data_process = dataset_process.DatasetProcess()
@@ -18,8 +21,17 @@ optimizer = keras.optimizers.Adam(0.0003)
 mc = trainers.MetricsControllerOne()
 # emb层
 feature_emb_model = FeatureEmbModel()
-# encode层
-attention_model = EncoderLayerMultiHeadAtt(32, 32)
+# encode层, 这里的序列长度是20
+if encoder_type == "v1":
+    attention_model = EncoderLayerSelfAtt(32, 32)
+elif encoder_type == "v2":
+    attention_model = EncoderLayerMultiHeadAtt(32, 32)
+elif encoder_type == "v3":
+    attention_model = EncoderLayerTimeEn(32, 32, 20)
+elif encoder_type == "v4":
+    attention_model = EncoderLayerConvTimeEn(32, 32, 20)
+else:
+    attention_model = EncoderLayerSelfAtt(32, 32)
 # mmoe
 mmoe_layer = mmoe.MMoE(units=256, num_experts=4, num_tasks=1)
 # 对比学习表达层
@@ -27,7 +39,6 @@ cl_expression_layer = nn.FullyConnectedTower([256], 'cl_expression', 'relu', 're
 # ctr预估层
 ctr_output = nn.FullyConnectedTower([128, 64, 1], 'ctr', 'relu', 'sigmoid')
 num_batches = 0
-
 # 开始训练
 for epoch in range(3):
     total_loss = 0.0
@@ -38,7 +49,6 @@ for epoch in range(3):
     mc.reset_train_metrics()
 
     for (i, (input_dict, target_pos, target_neg, seq_dict, label)) in rec_cf_data_iter:  # 某个批次
-
         with tf.GradientTape() as tape:
             # 这里先取出平台
             platform = input_dict['platform']
@@ -82,14 +92,6 @@ for epoch in range(3):
 
         num_batches += 1
         total_loss += combined_loss.numpy()
-        # 调用打印函数（在训练循环前调用一次即可）
-        print_trainable_params([
-            feature_emb_model,
-            attention_model,
-            mmoe_layer,
-            cl_expression_layer,
-            ctr_output
-        ])
 
         # 打印指标信息
         mc.log_train_metrics(True, epoch, i, total_loss / num_batches)
@@ -101,7 +103,6 @@ for epoch in range(3):
     # 重置验证集指标
     mc.reset_valid_metrics()
     for input_dict, target_pos, target_neg, seq_dict, label in valid_dataset:
-
         # 序列层
         seq_dict = feature_emb_model.call(seq_dict, mode="embedding_seq")
         attention_result = attention_model(seq_dict['hist_entity_id'], training=False)  # (1024, 20, 32)

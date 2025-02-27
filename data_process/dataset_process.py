@@ -206,24 +206,24 @@ class DatasetProcess:
 
     def create_dataset_cl(self, tfrecord_filenames, batch_size):
 
-        # dataset = tf.data.TFRecordDataset(tfrecord_filenames)
-        # dataset = dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
-        # for raw_record in dataset:
-        #     input_dict = tf.io.parse_example(raw_record, self.cl_feature_description)
-        #     # input_dict, target_pos, target_neg = self.process_single_example(example_proto)
-        #     # 对里面每个特征都进行一个预处理
-        #     parse_input_dict, parse_range_dict = self.feature_parse_model(input_dict)
-        #
-        #     seq_dict = tf.io.parse_example(raw_record, self.seq_feature_description)
-        #     seq_input_dict, _ = self.feature_parse_model(seq_dict)
-        #
-        #     target_pos = self.base_transform(parse_input_dict)
-        #     target_neg = self._generate_neg(parse_input_dict, parse_range_dict, batch_size)
-        #     label_dict = tf.io.parse_example(raw_record, self.label_description)
+        dataset = tf.data.TFRecordDataset(tfrecord_filenames)
+        dataset = dataset.batch(batch_size).prefetch(tf.data.experimental.AUTOTUNE)
+        for raw_record in dataset:
+            input_dict = tf.io.parse_example(raw_record, self.cl_feature_description)
+            # input_dict, target_pos, target_neg = self.process_single_example(example_proto)
+            # 对里面每个特征都进行一个预处理
+            parse_input_dict, parse_range_dict = self.feature_parse_model(input_dict)
 
-        # # 添加其他所需操作，例如batching和prefetching
+            seq_dict = tf.io.parse_example(raw_record, self.seq_feature_description)
+            seq_input_dict, _ = self.feature_parse_model(seq_dict)
 
-        # self.example_generator(tfrecord_filenames, batch_size)
+            target_pos = self.base_transform(parse_input_dict)
+            target_neg = self._generate_neg(parse_input_dict, parse_range_dict, batch_size)
+            label_dict = tf.io.parse_example(raw_record, self.label_description)
+
+        # 添加其他所需操作，例如batching和prefetching
+
+        self.example_generator(tfrecord_filenames, batch_size)
 
         output_signature = (
             {k: tf.TensorSpec(shape=(batch_size, v[1]), dtype="int64") for k, v in self.cl_features.items()},
