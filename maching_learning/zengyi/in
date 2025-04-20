@@ -1,0 +1,15 @@
+[['sunny', 'hot', 'high', 'yes'],
+['sunny', 'hot', 'high', 'no'],
+['overcast', 'hot', 'high', 'yes'],
+['rainy', 'mild', 'high', 'yes'],
+['rainy', 'cool', 'normal', 'yes'],
+['rainy', 'cool', 'normal', 'no'],
+['overcast', 'cool', 'normal', 'yes'],
+['sunny', 'mild', 'high', 'no'],
+['sunny', 'cool', 'normal', 'yes'],
+['rainy', 'mild', 'normal', 'yes'],
+['sunny', 'mild', 'normal', 'yes'],
+['overcast', 'mild', 'high', 'yes'],
+['overcast', 'hot', 'normal', 'no'],
+['snowy', 'mild', 'high', 'no']]
+1

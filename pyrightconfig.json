@@ -1,0 +1,6 @@
+{
+    "python.pythonPath": "venv/bin/python", // 适用于 macOS/Linux
+    // "python.pythonPath": "venv\\Scripts\\python.exe", // 适用于 Windows
+    "include": ["**/*.py"],
+    "exclude": ["node_modules", "venv"]
+}
